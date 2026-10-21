@@ -37,8 +37,15 @@ export interface HlFill {
   startPosition?: string; // posisi sebelum fill ini (bertanda)
   closedPnl: string;
   fee: string;
+  feeToken?: string;
   oid: number;
   hash: string;
+}
+
+export interface HlLedgerUpdate {
+  time: number;
+  hash: string;
+  delta: { type: string } & Record<string, unknown>;
 }
 
 export type HlPortfolio = [string, { accountValueHistory: [number, string][]; pnlHistory: [number, string][]; vlm: string }][];
@@ -98,6 +105,19 @@ export class HyperliquidInfo {
     return out;
   }
 
+  // Deposit, penarikan, kiriman, vault, dsb. (tanpa funding). Dedup per hash karena halaman bisa tumpang tindih.
+  async userNonFundingLedgerUpdates(user: string, startTime: number, endTime = Date.now(), maxPages = 10) {
+    const out = new Map<string, HlLedgerUpdate>();
+    let cursor = startTime;
+    for (let page = 0; page < maxPages; page++) {
+      const rows = await this.info<HlLedgerUpdate[]>({ type: 'userNonFundingLedgerUpdates', user, startTime: cursor, endTime });
+      for (const r of rows) out.set(`${r.hash}:${r.time}:${r.delta.type}`, r);
+      if (rows.length < 500) break;
+      cursor = rows[rows.length - 1].time + 1;
+    }
+    return [...out.values()].sort((a, b) => a.time - b.time);
+  }
+
   async candles(coin: string, interval: string, startTime: number, endTime: number): Promise<Candle[]> {
     const step = intervalMs(interval);
     const out: Candle[] = [];
@@ -138,6 +158,57 @@ export class HyperliquidInfo {
 }
 
 const STABLES = new Set(['USDC', 'USDT0', 'USDH', 'USDE', 'USDT']);
+
+// Arus modal stablecoin yang bukan hasil trading perp: deposit/penarikan, kiriman ke/dari alamat lain,
+// vault, dan belanja spot (beli token = modal keluar dari kolam trading). [ms, +masuk / −keluar].
+export function stableFlows(user: string, updates: HlLedgerUpdate[], spotFills: HlFill[] = []): [number, number][] {
+  const me = user.toLowerCase();
+  const n = (v: unknown) => Number(v ?? 0) || 0;
+  const transfer = (d: Record<string, unknown>, amount: number) => {
+    const src = String(d.user ?? '').toLowerCase();
+    const dst = String(d.destination ?? '').toLowerCase();
+    if (src === dst) return 0; // pindah antar-dex milik sendiri
+    if (dst === me) return amount;
+    if (src === me) return -(amount + n(d.fee));
+    return 0;
+  };
+  const out: [number, number][] = [];
+  for (const { time, delta: d } of updates) {
+    let f = 0;
+    switch (d.type) {
+      case 'deposit':
+        f = n(d.usdc);
+        break;
+      case 'withdraw':
+        f = -(n(d.usdc) + n(d.fee));
+        break;
+      case 'vaultDeposit':
+      case 'vaultCreate':
+        f = -n(d.usdc);
+        break;
+      case 'vaultWithdraw':
+        f = n(d.netWithdrawnUsd);
+        break;
+      case 'vaultDistribution':
+        f = n(d.usdc);
+        break;
+      case 'internalTransfer':
+      case 'subAccountTransfer':
+        f = transfer(d, n(d.usdc));
+        break;
+      case 'send':
+      case 'spotTransfer':
+        if (STABLES.has(String(d.token))) f = transfer(d, n(d.amount));
+        break;
+    }
+    if (f) out.push([time, f]);
+  }
+  for (const x of spotFills) {
+    const notional = n(x.px) * n(x.sz);
+    out.push([x.time, x.side === 'B' ? -notional : notional - (STABLES.has(String(x.feeToken)) ? n(x.fee) : 0)]);
+  }
+  return out.sort((a, b) => a[0] - b[0]);
+}
 
 export interface TradingEquity {
   equity: number; // modal trading yang menanggung posisi perp

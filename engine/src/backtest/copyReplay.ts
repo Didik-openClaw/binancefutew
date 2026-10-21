@@ -14,6 +14,9 @@ export interface ReplayInputs {
   to: number;
   fills: HlFill[]; // urut waktu, berisi startPosition
   leaderEquity: [number, number][]; // [ms, accountValue]
+  // accountValue = kurva nilai akun Hyperliquid; pnl+flows = akun unified, direkonstruksi dari PnL perp + arus dana.
+  equitySource?: 'accountValue' | 'pnl+flows';
+  flows?: [number, number][]; // arus dana bersih di luar trading (akun unified)
   openAtEnd: Record<string, number>; // posisi leader saat ini (untuk koin tanpa fill di jendela)
   candles: Record<string, Candle[]>; // 1h
   funding: Record<string, { t: number; rate: number }[]>;

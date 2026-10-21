@@ -90,3 +90,76 @@ describe('replay copy trading', () => {
     expect(r.stats.funding).toBeCloseTo(0.75, 1);
   });
 });
+
+describe('arus dana akun unified', () => {
+  it('menghitung deposit, penarikan, kiriman stablecoin, dan belanja spot; mengabaikan token non-stable & pindah antar-dex', async () => {
+    const { stableFlows } = await import('../src/data/hyperliquidInfo');
+    const me = '0xMe';
+    const u = (time: number, delta: Record<string, unknown>) => ({ time, hash: String(time), delta: delta as { type: string } });
+    const flows = stableFlows(
+      me,
+      [
+        u(1, { type: 'deposit', usdc: '500' }),
+        u(2, { type: 'withdraw', usdc: '99', fee: '1' }),
+        u(3, { type: 'send', user: '0xme', destination: '0x2000000000000000000000000000000000000000', token: 'USDC', amount: '200', fee: '0' }),
+        u(4, { type: 'spotTransfer', user: '0xother', destination: '0xme', token: 'USDC', amount: '50', fee: '0' }),
+        u(5, { type: 'spotTransfer', user: '0xother', destination: '0xme', token: 'HYPE', amount: '10', fee: '0' }),
+        u(6, { type: 'send', user: '0xme', destination: '0xme', token: 'USDC', amount: '70', fee: '0' }),
+        u(7, { type: 'accountClassTransfer', usdc: '1000', toPerp: true }),
+      ],
+      [{ coin: '@107', px: '40', sz: '2', side: 'B', time: 8, dir: 'Buy', closedPnl: '0', fee: '0.01', feeToken: 'HYPE', oid: 1, hash: '' }],
+    );
+    expect(flows).toEqual([
+      [1, 500],
+      [2, -100],
+      [3, -200],
+      [4, 50],
+      [8, -80],
+    ]);
+  });
+});
+
+describe('uji salin historis', () => {
+  const W = 168;
+  const weeks = 12;
+  // Tiap minggu harga naik 100 -> 102 lalu kembali; leader beli di jam 1, jual di jam 83.
+  const prices = Array.from({ length: weeks * W + 1 }, (_, i) => {
+    const h = i % W;
+    return h <= 84 ? 100 + (2 * h) / 84 : 102 - (2 * (h - 84)) / 84;
+  });
+  const swing = (fromWeek: number) =>
+    Array.from({ length: weeks - fromWeek }, (_, k) => {
+      const w = (fromWeek + k) * W * H;
+      return [fill(T0 + w + 1 * H, 'B', 0, 1, prices[(fromWeek + k) * W + 1]), fill(T0 + w + 83 * H, 'A', 1, 1, prices[(fromWeek + k) * W + 83])];
+    }).flat();
+  const inputs = (address: string, fromWeek: number): ReplayInputs => ({
+    leader: address,
+    from: T0,
+    to: T0 + weeks * W * H,
+    fills: swing(fromWeek),
+    leaderEquity: [[T0, 1000]],
+    openAtEnd: {},
+    candles: { BTC: candles(prices) },
+    funding: {},
+  });
+  const view = (address: string, score: number) => ({
+    address, label: address, accountValue: 1000, weekRoi: 0.1, monthRoi: 0.2, allTimePnl: 0, winRate: 1, maxDrawdown: 0.1, fillsPerDay: 1, holdHours: 80, scalpShare: 0, positiveDays: 0.6, score, weight: 0.5, status: 'copying' as const, openPositions: 0,
+  });
+
+  it('lolos bila konsisten berminggu-minggu; trader yang baru aktif ditolak walau skor scout lebih tinggi', async () => {
+    const { vetLeaders, VET_DEFAULTS } = await import('../src/scout/vet');
+    const o = { ...VET_DEFAULTS, days: weeks * 7, replay: opts };
+    const data: Record<string, ReplayInputs> = { '0xsteady': inputs('0xsteady', 0), '0xnew': inputs('0xnew', weeks - 2) };
+    const r = await vetLeaders([view('0xnew', 0.9), view('0xsteady', 0.5)], o, async (a) => data[a], 1, 0.5);
+    const steady = r.leaders.find((l) => l.address === '0xsteady')!;
+    const fresh = r.leaders.find((l) => l.address === '0xnew')!;
+    expect(steady.vet?.pass).toBe(true);
+    expect(steady.vet?.weeksUp).toBe(weeks);
+    expect(steady.status).toBe('copying');
+    expect(steady.weight).toBe(1);
+    expect(fresh.status).toBe('rejected');
+    expect(fresh.reason).toMatch(/aktif hanya 2 dari 12 minggu/);
+    expect(r.leaders[0].address).toBe('0xsteady');
+    expect(r.passed).toBe(1);
+  });
+});

@@ -56,8 +56,11 @@ const Env = z.object({
   SCOUT_MAX_DRAWDOWN: num,
   SCOUT_DEEP_DIVE: num,
   SCOUT_EXHAUSTIVE: bool,
+  SCOUT_VET_DAYS: num,
+  SCOUT_VET_TOP: num,
   CYCLE_ANCHOR: z.enum(['monday', 'start']).optional(),
   LEADER_SLOTS: num,
+  COPY_MULTIPLIER: num,
   API_HOST: z.string().optional(),
   API_PORT: num,
   DASHBOARD_TOKEN: z.string().optional(),
@@ -90,6 +93,8 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}) {
     riskProfile: e.RISK_PROFILE ?? 'bold',
     // Jumlah trader yang disalin (default mengikuti profil risiko).
     leaderSlots: e.LEADER_SLOTS,
+    // Pengali ukuran salinan; kosong = ikut profil risiko.
+    copyMultiplier: e.COPY_MULTIPLIER,
     // monday = siklus Senin 00:00 UTC; start = 7 hari sejak seleksi dijalankan.
     cycleAnchor: e.CYCLE_ANCHOR ?? 'monday',
     paperStartEquity: e.PAPER_START_EQUITY ?? 10_000,
@@ -119,6 +124,9 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}) {
       deepDive: e.SCOUT_DEEP_DIVE ?? 40,
       // true = analisis semua kandidat sampai batas deepDive, tidak berhenti saat slot terisi.
       exhaustive: e.SCOUT_EXHAUSTIVE ?? false,
+      // Uji salin historis: kandidat teratas disalin ulang dari fill aslinya N hari ke belakang (0 = mati).
+      vetDays: e.SCOUT_VET_DAYS ?? 120,
+      vetTop: e.SCOUT_VET_TOP ?? 12,
     },
     api: {
       host: e.API_HOST ?? '127.0.0.1',

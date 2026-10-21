@@ -23,9 +23,10 @@ import type { Config } from '../config';
 import type { MarketHistory } from '../data/market';
 import type { Broker, BrokerPosition, Fill } from '../exchanges/types';
 import { nextWeekStart, WEEK, weekStart } from '../lib/time';
-import { RISK_PROFILES } from '../risk/profiles';
+import { resolveProfile } from '../risk/profiles';
 import { RiskManager, type RiskPersisted } from '../risk/riskManager';
 import type { ScoutOptions, ScoutResult } from '../scout/hyperliquidScout';
+import type { FetchInputs } from '../scout/vet';
 import { runSelection } from '../weekly';
 import type { LeaderSnapshot, LeaderSource } from '../sources/leaders';
 import type { Store } from '../store';
@@ -41,6 +42,8 @@ export interface EngineDeps {
   clock: () => number;
   leaderSource: (address: string, label?: string) => LeaderSource;
   scout: (o: ScoutOptions) => Promise<ScoutResult>;
+  // Uji salin historis kandidat scout (tidak ada di mode demo).
+  vetInputs?: (days: number) => FetchInputs;
   synthetic: boolean;
   log?: (m: string) => void;
 }
@@ -92,7 +95,7 @@ export class Engine extends EventEmitter {
     super();
     const { store, cfg } = d;
     const profileId = store.readJson<{ profile?: RiskProfileId }>('settings', {}).profile ?? cfg.riskProfile;
-    this.risk = new RiskManager(RISK_PROFILES[profileId], store.readJson<RiskPersisted>('risk', RiskManager.fresh(0, d.clock())));
+    this.risk = new RiskManager(resolveProfile(profileId, cfg.copyMultiplier), store.readJson<RiskPersisted>('risk', RiskManager.fresh(0, d.clock())));
     this.sleeve = new StrategySleeve(d.market, cfg.strategyInterval, this.risk.profile);
     this.playbook = store.readJson<Playbook | null>('playbook', null);
     this.tournament = store.readJson<TournamentReport | null>('tournament', null);
@@ -156,6 +159,7 @@ export class Engine extends EventEmitter {
         log: (m) => this.log(m),
         now,
         skipTournament: cfg.allocStrategy === 0,
+        vetInputs: this.d.vetInputs ?? null,
       });
       const { run } = sel;
       if (sel.failedCoins.length) this.alert('warn', `Data tidak tersedia untuk: ${sel.failedCoins.join(', ')}`);
@@ -552,7 +556,7 @@ export class Engine extends EventEmitter {
   }
 
   setProfile(id: RiskProfileId) {
-    this.risk.profile = RISK_PROFILES[id];
+    this.risk.profile = resolveProfile(id, this.d.cfg.copyMultiplier);
     this.sleeve.setProfile(this.risk.profile);
     this.saveSettings();
     this.alert('info', `Profil risiko diubah ke ${this.risk.profile.label}. Berlaku penuh pada seleksi mingguan berikutnya.`);

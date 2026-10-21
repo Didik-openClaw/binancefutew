@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { startApi } from './api/server';
 import { BINANCE_LEADER_ID, loadConfig } from './config';
@@ -10,11 +10,11 @@ import { BinanceLiveBroker, HyperliquidLiveBroker } from './exchanges/live';
 import { PaperBroker } from './exchanges/paper';
 import type { Broker } from './exchanges/types';
 import { HOUR, sleep, WEEK } from './lib/time';
-import { RISK_PROFILES } from './risk/profiles';
+import { resolveProfile } from './risk/profiles';
 import { hyperliquidSource, isStandardPerp, runScout, type ScoutOptions, type ScoutResult } from './scout/hyperliquidScout';
 import { printScout, printTournament, printVerdict } from './report';
 import { runSelection } from './weekly';
-import { runReplay, weeklyBreakdown } from './replayCli';
+import { replayFetcher, runReplay, weeklyBreakdown } from './replayCli';
 import { BinanceAccountLeader, HyperliquidWalletLeader } from './sources/leaders';
 import { Store } from './store';
 
@@ -67,7 +67,7 @@ async function main() {
 
   if (cmd === 'tournament' || cmd === 'hunt') {
     // hunt = turnamen strategi + scout trader, sama persis dengan siklus Senin di engine.
-    const profile = RISK_PROFILES[cfg.riskProfile];
+    const profile = resolveProfile(cfg.riskProfile, cfg.copyMultiplier);
     let market: MarketHistory = new RealMarket(join(cfg.dataDir, 'cache'), log, cfg.dataSource);
     let scout: ((o: ScoutOptions) => Promise<ScoutResult>) | null = cmd === 'hunt' ? (o) => runScout(o, hyperliquidSource(), log) : null;
     let now = Date.now();
@@ -99,6 +99,7 @@ async function main() {
       supports,
       log,
       now,
+      vetInputs: args.includes('--demo') ? null : (days) => replayFetcher(days, log),
     });
     if (sel.failedCoins.length) log(`Tanpa data: ${sel.failedCoins.join(', ')}`);
     if (!sel.run) throw new Error('Turnamen tidak dijalankan');
@@ -125,16 +126,19 @@ async function main() {
     const days = Number(opt('days', '30'));
     const start = Number(opt('start', '1000'));
     const entry = opt('entry', 'mirror') as 'mirror' | 'new-only';
-    const profile = RISK_PROFILES[cfg.riskProfile];
+    const profile = resolveProfile(cfg.riskProfile, cfg.copyMultiplier);
     const mults = opt('mult', String(profile.copyMultiplier)).split(',').map(Number);
     const dir = join(cfg.dataDir, 'state', 'replay');
     const summary: Record<string, unknown>[] = [];
     for (const [i, a] of addrs.entries()) {
      let cached: Awaited<ReturnType<typeof runReplay>>['inputs'] | undefined;
+     // --reuse: candle & funding dari input tersimpan dipakai ulang; fill, nilai akun & ledger tetap diunduh baru.
+     const saved = join(dir, `replay-${a.toLowerCase()}-${days}d-inputs.json`);
+     const prev = args.includes('--reuse') && existsSync(saved) ? JSON.parse(readFileSync(saved, 'utf8')) : undefined;
      for (const mult of mults) {
       let out: Awaited<ReturnType<typeof runReplay>>;
       try {
-        out = await runReplay(a.toLowerCase(), days, profile, start, entry, dir, log, mult, cached);
+        out = await runReplay(a.toLowerCase(), days, profile, start, entry, dir, log, mult, cached, prev);
       } catch (e) {
         log(`  ${a}: replay gagal (${e instanceof Error ? e.message : e})`);
         break;
@@ -179,7 +183,7 @@ async function main() {
   }
 
   if (cmd === 'scout') {
-    const profile = RISK_PROFILES[cfg.riskProfile];
+    const profile = resolveProfile(cfg.riskProfile, cfg.copyMultiplier);
     let supports = isStandardPerp;
     try {
       const listed = new Set(await (cfg.venue === 'binance' ? new BinanceFeed() : new HyperliquidFeed()).listCoins());
@@ -187,11 +191,24 @@ async function main() {
     } catch {
       log('Daftar koin venue tidak bisa diambil; memakai saringan perp standar.');
     }
-    const r = await runScout({ ...cfg.scout, slots: cfg.leaderSlots ?? profile.leaderSlots, concentration: profile.concentration, supports }, hyperliquidSource(), log);
-    printScout(r.leaders, r.summary);
+    // Scout + uji salin historis (sama dengan siklus mingguan engine, tanpa turnamen strategi).
+    const sel = await runSelection({
+      cfg,
+      market: new RealMarket(join(cfg.dataDir, 'cache'), log, cfg.dataSource),
+      profile,
+      feeRate: cfg.venue === 'hyperliquid' ? 0.00045 : 0.0005,
+      scout: (o) => runScout(o, hyperliquidSource(), log),
+      supports,
+      log,
+      now: Date.now(),
+      skipTournament: true,
+      vetInputs: (days) => replayFetcher(days, log),
+    });
+    if (!sel.leaders) throw new Error(`Scout gagal: ${sel.scoutError}`);
+    printScout(sel.leaders, sel.scout);
     const store = new Store(join(cfg.dataDir, 'state'));
-    store.writeJson('leaders', r.leaders);
-    store.writeJson('scout', r.summary);
+    store.writeJson('leaders', sel.leaders);
+    store.writeJson('scout', sel.scout);
     return;
   }
 
@@ -228,6 +245,7 @@ async function main() {
             ? new BinanceAccountLeader(address, 'Akun Binance (read-only)', cfg.binanceLeader.apiKey, cfg.binanceLeader.apiSecret)
             : new HyperliquidWalletLeader(address, label),
         scout: (o) => runScout(o, hyperliquidSource(), log),
+        vetInputs: (days) => replayFetcher(days, log),
         synthetic: false,
         log,
       });

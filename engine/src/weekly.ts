@@ -3,7 +3,9 @@ import { runTournament, type TournamentOptions, type TournamentRun } from './bac
 import type { Config } from './config';
 import type { MarketHistory } from './data/market';
 import type { RiskProfile } from './risk/profiles';
+import { replayOptions } from './replayCli';
 import type { ScoutOptions, ScoutResult } from './scout/hyperliquidScout';
+import { VET_DEFAULTS, vetLeaders, type FetchInputs } from './scout/vet';
 
 export const META_WEEKS = 8;
 
@@ -18,6 +20,8 @@ export interface SelectionDeps {
   now: number;
   // true = porsi strategi 0%: turnamen dilewati, hanya scout trader.
   skipTournament?: boolean;
+  // Pengambil input replay untuk uji salin historis (null = uji dilewati, mis. mode demo).
+  vetInputs?: ((days: number) => FetchInputs) | null;
 }
 
 export interface SelectionResult {
@@ -80,10 +84,28 @@ export async function runSelection(x: SelectionDeps): Promise<SelectionResult> {
   let scoutError: string | undefined;
   if (x.scout) {
     try {
-      const r = await x.scout({ ...cfg.scout, slots: cfg.leaderSlots ?? x.profile.leaderSlots, concentration: x.profile.concentration, supports: x.supports });
+      const slots = cfg.leaderSlots ?? x.profile.leaderSlots;
+      // Uji salin butuh kandidat lebih banyak dari slot: scout tidak berhenti saat slot terisi.
+      const vetting = !!x.vetInputs && cfg.scout.vetDays > 0;
+      const r = await x.scout({ ...cfg.scout, slots, concentration: x.profile.concentration, supports: x.supports, exhaustive: cfg.scout.exhaustive || vetting });
       leaders = r.leaders;
       scout = r.summary;
       log(`Scout: ${r.summary.analyzed} trader dianalisis dalam ${r.summary.rounds} putaran, ${r.summary.qualified} lolos (saringan ${r.summary.levelLabel})`);
+      if (vetting && x.vetInputs) {
+        const days = cfg.scout.vetDays;
+        log(`Uji salin historis: ${Math.min(cfg.scout.vetTop, r.summary.qualified)} kandidat teratas, ${days} hari, $1.000, pengali ${x.profile.copyMultiplier}`);
+        const v = await vetLeaders(
+          r.leaders,
+          { ...VET_DEFAULTS, days, top: cfg.scout.vetTop, minActiveWeeks: Math.min(VET_DEFAULTS.minActiveWeeks, Math.floor(days / 14)), replay: replayOptions(x.profile, 1000, cfg.entryPolicy) },
+          x.vetInputs(days),
+          slots,
+          x.profile.concentration,
+          log,
+        );
+        leaders = v.leaders;
+        scout = { ...r.summary, vetDays: days, vetted: v.tested, vetPassed: v.passed };
+        log(`  ${v.passed} dari ${v.tested} lolos uji salin`);
+      }
     } catch (e) {
       scoutError = e instanceof Error ? e.message : String(e);
     }

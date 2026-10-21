@@ -221,7 +221,8 @@ export function hyperliquidSource(info = new HyperliquidInfo()): ScoutSource {
 }
 
 // Perp standar Hyperliquid (bukan pasar HIP-3 "dex:COIN" atau spot "@123").
-export const isStandardPerp = (coin: string) => !coin.includes(':') && !coin.startsWith('@');
+// Perp utama Hyperliquid: bukan spot (@n, A/B), bukan HIP-3 (dex:COIN), bukan pasar outcome (#n).
+export const isStandardPerp = (coin: string) => /^[A-Za-z0-9]+$/.test(coin);
 
 export function rejectReason(r: ParsedRow, m: DeepMetrics, o: ScoutOptions): string | undefined {
   if (m.fillsPerDay > o.maxFillsPerDay) return `Terlalu sering trading (${m.fillsPerDay.toFixed(0)} fill/hari) — gaya bot, tidak bisa disalin tepat waktu`;

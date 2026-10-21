@@ -146,6 +146,26 @@ export interface LeaderView {
   status: 'copying' | 'candidate' | 'rejected';
   reason?: string;
   openPositions: number;
+  vet?: VetView; // hasil uji salin historis (bila dijalankan)
+}
+
+// Uji salin historis: $1.000 menyalin trader ini dari fill aslinya selama `days` hari.
+export interface VetView {
+  address: string;
+  days: number;
+  copyMultiplier: number;
+  weeks: number;
+  activeWeeks: number;
+  weeksUp: number;
+  totalReturn: number;
+  weeklyGrowth: number; // rata-rata geometris per minggu
+  worstWeek: number;
+  maxDrawdown: number;
+  killSwitchHits: number;
+  psr: number;
+  orders: number;
+  pass: boolean;
+  reason?: string;
 }
 
 export interface ScoutSummary {
@@ -156,6 +176,9 @@ export interface ScoutSummary {
   level: number; // 0 ketat .. 2 longgar
   levelLabel: string;
   qualified: number;
+  vetDays?: number; // uji salin historis: panjang jendela
+  vetted?: number; // kandidat yang diuji
+  vetPassed?: number; // yang lolos uji
 }
 
 export interface Playbook {

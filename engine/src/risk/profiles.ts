@@ -66,3 +66,9 @@ export const RISK_PROFILES: Record<RiskProfileId, RiskProfile> = {
     concentration: 0.25,
   },
 };
+
+// Profil dengan pengali salin yang di-override dari .env (COPY_MULTIPLIER).
+export function resolveProfile(id: RiskProfileId, copyMultiplier?: number): RiskProfile {
+  const base = RISK_PROFILES[id];
+  return copyMultiplier && copyMultiplier > 0 ? { ...base, copyMultiplier } : base;
+}
