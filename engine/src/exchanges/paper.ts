@@ -1,11 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Venue } from '../../../shared/types';
+import type { FundingEntry, Venue } from '../../../shared/types';
 import type { Broker, BrokerPosition, Fill, OrderRequest, PriceFeed } from './types';
 
 interface PaperState {
-  cash: number; // setoran + realized PnL - fee
+  cash: number; // setoran + realized PnL - fee - funding
   fees: number;
+  funding?: number; // total funding dibayar (positif) / diterima (negatif)
+  fundingSlot?: number; // slot funding terakhir yang sudah dibebankan
   positions: Record<string, BrokerPosition>;
   seq: number;
 }
@@ -70,6 +72,41 @@ export class PaperBroker implements Broker {
 
   feesPaid() {
     return this.s.fees;
+  }
+
+  fundingPaid() {
+    return this.s.funding ?? 0;
+  }
+
+  // Funding dibebankan sekali per slot (Hyperliquid tiap jam, Binance tiap 8 jam) dengan tarif & harga mark asli.
+  async settleFunding(now: number): Promise<FundingEntry[]> {
+    if (!this.feed.fundingRates) return [];
+    const { rates, intervalHours } = await this.feed.fundingRates();
+    const slot = Math.floor(now / (intervalHours * 3_600_000));
+    if (this.s.fundingSlot === undefined) {
+      this.s.fundingSlot = slot;
+      this.persist();
+      return [];
+    }
+    if (slot <= this.s.fundingSlot) return [];
+    const coins = Object.keys(this.s.positions);
+    const marks = coins.length ? await this.feed.markPrices(coins) : {};
+    const entries: FundingEntry[] = [];
+    // Slot yang terlewat (mis. engine sempat mati) dibebankan dengan tarif saat ini.
+    const missed = Math.min(slot - this.s.fundingSlot, 24);
+    for (const c of coins) {
+      const p = this.s.positions[c];
+      const rate = rates[c];
+      const mark = marks[c] ?? p.entryPx;
+      if (!rate) continue;
+      const amount = p.size * mark * rate * missed;
+      this.s.cash -= amount;
+      this.s.funding = (this.s.funding ?? 0) + amount;
+      entries.push({ t: slot * intervalHours * 3_600_000, coin: c, size: p.size, mark, rate: rate * missed, amount });
+    }
+    this.s.fundingSlot = slot;
+    this.persist();
+    return entries;
   }
 
   async marketOrder(o: OrderRequest): Promise<Fill> {

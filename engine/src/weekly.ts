@@ -16,10 +16,12 @@ export interface SelectionDeps {
   supports: (coin: string) => boolean;
   log: (m: string) => void;
   now: number;
+  // true = porsi strategi 0%: turnamen dilewati, hanya scout trader.
+  skipTournament?: boolean;
 }
 
 export interface SelectionResult {
-  run: TournamentRun;
+  run: TournamentRun | null;
   leaders: LeaderView[] | null; // null = scout tidak jalan / gagal
   scout: ScoutSummary | null;
   failedCoins: string[];
@@ -41,14 +43,18 @@ export async function runSelection(x: SelectionDeps): Promise<SelectionResult> {
     expanded,
   });
 
-  log(`Turnamen: ${cfg.universe.length} koin, ${weeks} minggu candle ${cfg.strategyInterval}`);
-  const base = await market.dataset(cfg.universe, cfg.strategyInterval, weeks);
-  let run = runTournament(base.d, opts(base.funding), x.now);
-  let failed = base.failed;
-  log(`  saringan ${run.report.qualification.levelLabel}: ${run.report.qualification.qualified}/${run.report.qualification.tested} lolos`);
+  let run: TournamentRun | null = null;
+  let failed: string[] = [];
+  if (!x.skipTournament) {
+    log(`Turnamen: ${cfg.universe.length} koin, ${weeks} minggu candle ${cfg.strategyInterval}`);
+    const base = await market.dataset(cfg.universe, cfg.strategyInterval, weeks);
+    run = runTournament(base.d, opts(base.funding), x.now);
+    failed = base.failed;
+    log(`  saringan ${run.report.qualification.levelLabel}: ${run.report.qualification.qualified}/${run.report.qualification.tested} lolos`);
+  }
 
   // Tidak ada kandidat yang lolos saringan Ketat -> cari di koin likuid lain sebelum menerima bukti yang lebih lemah.
-  if (run.level >= 1 && market.topCoins) {
+  if (run && run.level >= 1 && market.topCoins) {
     try {
       const top = await market.topCoins(25);
       const extra = top.filter((c) => !cfg.universe.includes(c));
@@ -58,6 +64,7 @@ export async function runSelection(x: SelectionDeps): Promise<SelectionResult> {
         const run2 = runTournament(wide.d, opts(wide.funding, true), x.now);
         log(`  hasil perluasan: saringan ${run2.report.qualification.levelLabel}, ${run2.report.qualification.qualified}/${run2.report.qualification.tested} lolos`);
         const better = run2.level < run.level || (run2.level === run.level && (run2.picks[0]?.score ?? -Infinity) > (run.picks[0]?.score ?? -Infinity));
+        // (run dijamin terisi di blok ini)
         if (better) {
           run = run2;
           failed = wide.failed;
@@ -73,7 +80,7 @@ export async function runSelection(x: SelectionDeps): Promise<SelectionResult> {
   let scoutError: string | undefined;
   if (x.scout) {
     try {
-      const r = await x.scout({ ...cfg.scout, slots: x.profile.leaderSlots, concentration: x.profile.concentration, supports: x.supports });
+      const r = await x.scout({ ...cfg.scout, slots: cfg.leaderSlots ?? x.profile.leaderSlots, concentration: x.profile.concentration, supports: x.supports });
       leaders = r.leaders;
       scout = r.summary;
       log(`Scout: ${r.summary.analyzed} trader dianalisis dalam ${r.summary.rounds} putaran, ${r.summary.qualified} lolos (saringan ${r.summary.levelLabel})`);

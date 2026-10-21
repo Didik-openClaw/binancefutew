@@ -1,13 +1,21 @@
+import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 import type {
   DashboardSnapshot,
   EngineAlert,
   EquityPoint,
+  FundingEntry,
   LeaderView,
   Playbook,
   PositionView,
+  ProvenanceView,
+  ReplayView,
   RiskProfileId,
   ScoutSummary,
+  StatementView,
   TournamentReport,
   TradeView,
 } from '../../../shared/types';
@@ -21,6 +29,7 @@ import type { ScoutOptions, ScoutResult } from '../scout/hyperliquidScout';
 import { runSelection } from '../weekly';
 import type { LeaderSnapshot, LeaderSource } from '../sources/leaders';
 import type { Store } from '../store';
+import { auditLedger } from '../backtest/copyReplay';
 import { capTargets, computeTargets, planOrders } from './mirror';
 import { StrategySleeve } from './strategySleeve';
 
@@ -59,6 +68,12 @@ export class Engine extends EventEmitter {
   private baseline: Baseline;
   private equity: EquityPoint[];
   private trades: TradeView[];
+  private fundingLog: FundingEntry[];
+  private statement: StatementView | null = null;
+  private files: ProvenanceView['files'] = [];
+  private lastAudit = -Infinity;
+  private replay: ReplayView | null;
+  private codeVersion: string | null = null;
   private alerts: EngineAlert[] = [];
   private state: 'running' | 'paused' | 'halted' | 'starting' = 'starting';
   private startedAt: number;
@@ -86,6 +101,13 @@ export class Engine extends EventEmitter {
     this.baseline = store.readJson<Baseline>('baseline', {});
     this.equity = store.readJsonl<EquityPoint>('equity', MAX_EQUITY_POINTS);
     this.trades = store.readJsonl<TradeView>('trades', 500);
+    this.fundingLog = store.readJsonl<FundingEntry>('funding', 500);
+    this.replay = store.readJson<ReplayView | null>('replay', null);
+    try {
+      this.codeVersion = execSync('git rev-parse --short HEAD', { cwd: cfg.root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    } catch {
+      this.codeVersion = null;
+    }
     this.startEquity = store.readJson<{ startEquity?: number }>('settings', {}).startEquity ?? 0;
     this.startedAt = d.clock();
     if (this.playbook?.appliedAt) this.activate(this.playbook, false);
@@ -133,16 +155,19 @@ export class Engine extends EventEmitter {
         supports: (c) => this.d.broker.supports(c),
         log: (m) => this.log(m),
         now,
+        skipTournament: cfg.allocStrategy === 0,
       });
       const { run } = sel;
       if (sel.failedCoins.length) this.alert('warn', `Data tidak tersedia untuk: ${sel.failedCoins.join(', ')}`);
-      const q = run.report.qualification;
-      this.alert(
-        q.level >= 2 ? 'warn' : 'info',
-        `Turnamen: ${q.qualified} dari ${q.tested} kandidat lolos saringan ${q.levelLabel}${q.expanded ? ' (universe diperluas)' : ''}; aturan seleksi terpilih ${run.report.chosenRule}.`,
-      );
-      this.tournament = run.report;
-      this.d.store.writeJson('tournament', run.report);
+      if (run) {
+        const q = run.report.qualification;
+        this.alert(
+          q.level >= 2 ? 'warn' : 'info',
+          `Turnamen: ${q.qualified} dari ${q.tested} kandidat lolos saringan ${q.levelLabel}${q.expanded ? ' (universe diperluas)' : ''}; aturan seleksi terpilih ${run.report.chosenRule}.`,
+        );
+        this.tournament = run.report;
+        this.d.store.writeJson('tournament', run.report);
+      } else this.alert('info', 'Porsi strategi 0%: turnamen dilewati, 100% modal untuk copy trader.');
 
       let leaders: LeaderView[] = [];
       if (sel.scoutError) {
@@ -158,7 +183,7 @@ export class Engine extends EventEmitter {
       this.d.store.writeJson('leaders', leaders);
 
       const copying = leaders.filter((l) => l.status === 'copying' && l.weight > 0);
-      const strategies = run.picks.map((p) => ({ id: p.candidate.id, label: p.candidate.label, weight: p.weight, universe: p.candidate.universe }));
+      const strategies = (run?.picks ?? []).map((p) => ({ id: p.candidate.id, label: p.candidate.label, weight: p.weight, universe: p.candidate.universe }));
       const allocation =
         !copying.length && !strategies.length
           ? { strategy: 0, copy: 0 }
@@ -167,12 +192,15 @@ export class Engine extends EventEmitter {
             : !strategies.length
               ? { strategy: 0, copy: 1 }
               : { strategy: cfg.allocStrategy, copy: 1 - cfg.allocStrategy };
-      const ws = weekStart(now);
+      // Siklus: Senin–Senin UTC (default) atau 7 hari sejak sekarang (CYCLE_ANCHOR=start).
+      const ws = cfg.cycleAnchor === 'start' ? now : weekStart(now);
       const notes: string[] = [];
-      if (run.picks[0]) notes.push(`Juara strategi: ${run.picks[0].candidate.label} (skor ${run.picks[0].score.toFixed(4)}, saringan ${q.levelLabel})`);
-      notes.push(
-        `Uji rotasi ${run.report.policy.weeks.length} minggu: ${(run.report.policy.totalReturn * 100).toFixed(1)}% vs ${run.report.benchmarkCoin} ${(run.report.policy.benchmarkReturn * 100).toFixed(1)}%`,
-      );
+      if (run?.picks[0]) notes.push(`Juara strategi: ${run.picks[0].candidate.label} (skor ${run.picks[0].score.toFixed(4)}, saringan ${run.report.qualification.levelLabel})`);
+      if (run) {
+        notes.push(
+          `Uji rotasi ${run.report.policy.weeks.length} minggu: ${(run.report.policy.totalReturn * 100).toFixed(1)}% vs ${run.report.benchmarkCoin} ${(run.report.policy.benchmarkReturn * 100).toFixed(1)}%`,
+        );
+      } else notes.push('Mode copy penuh: 100% modal mengikuti trader terpilih.');
       if (copying.length) notes.push(`${copying.length} trader Hyperliquid disalin`);
       const pb: Playbook = {
         weekStart: ws,
@@ -211,6 +239,12 @@ export class Engine extends EventEmitter {
         existing.status = 'copying';
         existing.reason = undefined;
       } else {
+        // Wallet manual yang pernah dianalisis (mis. lewat `npm run hunt`) tetap membawa metriknya.
+        const known = this.leaders.find((l) => l.address === addr);
+        if (known) {
+          out.unshift({ ...known, weight: share, status: 'copying', reason: undefined });
+          continue;
+        }
         out.unshift({
           address: addr,
           label: addr.startsWith('0x') ? `${addr.slice(0, 6)}…${addr.slice(-4)} (manual)` : 'Akun Binance (read-only)',
@@ -259,11 +293,18 @@ export class Engine extends EventEmitter {
     try {
       if ((!this.playbook || this.playbook.weekEnd <= now) && now >= this.cycleRetryAt) await this.runWeeklyCycle(this.playbook ? 'minggu baru' : 'start pertama');
 
+      // Funding (paper): dibebankan per slot dengan tarif & harga mark asli, dicatat ke ledger.
+      const funding = (await this.d.broker.settleFunding?.(now)) ?? [];
+      for (const f of funding) {
+        this.fundingLog = [...this.fundingLog, f].slice(-500);
+        this.d.store.appendJsonl('funding', f);
+      }
+
       const [equity, positions] = await Promise.all([this.d.broker.equity(), this.d.broker.positions()]);
       this.lastEquity = equity;
       this.lastPositions = positions;
 
-      const r = this.risk.update(equity, now);
+      const r = this.risk.update(equity, now, this.d.cfg.cycleAnchor === 'start' && this.playbook ? { start: this.playbook.weekStart, end: this.playbook.weekEnd } : undefined);
       if (r === 'halt') {
         this.alert('critical', `Kill switch: rugi minggu ini ${(this.risk.lossFraction(equity) * 100).toFixed(1)}% ≥ batas ${(this.risk.profile.weeklyLossLimit * 100).toFixed(0)}%. Semua posisi ditutup sampai Senin.`);
         await this.flatten('kill switch');
@@ -278,6 +319,7 @@ export class Engine extends EventEmitter {
       else this.lastMarks = await this.d.broker.markPrices(Object.keys(positions));
 
       this.recordEquity(now, this.state === 'running' ? await this.d.broker.equity() : equity);
+      if (now - this.lastAudit >= 60_000) await this.audit(now);
     } catch (e) {
       this.alert('warn', `Tick gagal: ${e instanceof Error ? e.message : e}`);
     }
@@ -381,6 +423,82 @@ export class Engine extends EventEmitter {
     const names = src.map((s) => (s === 'strategy' ? 'strategi' : (this.leaders.find((l) => l.address === s)?.label ?? s.slice(0, 8))));
     if (!names.length) return reduce ? 'tutup (tidak ada target)' : 'rebalance';
     return `${reduce ? 'kurangi' : 'ikut'} ${names.join(' + ')}`;
+  }
+
+  // Rekonsiliasi: ekuitas dihitung ulang HANYA dari ledger (trade + funding) dan harga mark,
+  // lalu dibandingkan dengan ekuitas broker. Paper: harus sama sampai sen. Live: posisi harus sama.
+  async audit(now: number) {
+    const { broker, store } = this.d;
+    const trades = store.dir ? store.readJsonl<TradeView>('trades') : this.trades;
+    const fundingTotal = broker.fundingPaid?.() ?? this.fundingLog.reduce((a, f) => a + f.amount, 0);
+    const brokerPos = await broker.positions();
+    const coins = [...new Set([...trades.map((t) => t.coin), ...Object.keys(brokerPos)])];
+    const marks = coins.length ? await broker.markPrices(coins) : {};
+    const brokerEquity = await broker.equity();
+    const ledger = auditLedger(this.startEquity, trades, marks);
+    const ledgerEquity = ledger.equity - fundingTotal;
+    const sizes = new Set([...Object.keys(ledger.positions), ...Object.keys(brokerPos)]);
+    const positionsMatch = [...sizes].every((c) => Math.abs((ledger.positions[c] ?? 0) - (brokerPos[c]?.size ?? 0)) <= 1e-9 * Math.max(1, Math.abs(brokerPos[c]?.size ?? 0)));
+    const diff = brokerEquity - ledgerEquity;
+    const unrealized = ledger.equity - (this.startEquity + ledger.realized - ledger.fees);
+    this.statement = {
+      periodStart: this.equity[0]?.t ?? this.startedAt,
+      periodEnd: now,
+      startEquity: this.startEquity,
+      realized: ledger.realized,
+      fees: ledger.fees,
+      funding: fundingTotal,
+      unrealized,
+      endEquity: brokerEquity,
+      netPnl: brokerEquity - this.startEquity,
+      tradeCount: trades.length,
+      fundingEvents: this.fundingLog.length,
+      reconciled: broker.live ? positionsMatch : positionsMatch && Math.abs(diff) < 0.01,
+      ledgerEquity,
+      diff,
+      checkedAt: now,
+    };
+    if (!this.statement.reconciled) this.alert('warn', `Rekonsiliasi ledger tidak cocok: selisih $${diff.toFixed(4)}${positionsMatch ? '' : ', posisi berbeda'}.`);
+    if (store.dir) {
+      this.files = ['trades.jsonl', 'funding.jsonl', 'equity.jsonl', 'paper-account.json']
+        .map((name) => ({ name, path: join(store.dir!, name) }))
+        .filter((f) => existsSync(f.path))
+        .map((f) => {
+          const buf = readFileSync(f.path);
+          return { name: f.name, sha256: createHash('sha256').update(buf).digest('hex'), lines: buf.toString().split('\n').filter(Boolean).length };
+        });
+    }
+    this.lastAudit = now;
+  }
+
+  private provenance(): ProvenanceView {
+    const synthetic = this.d.synthetic;
+    const hl = this.d.broker.venue === 'hyperliquid';
+    const sources = synthetic
+      ? [
+          { label: 'Harga & candle', endpoint: 'Pasar sintetis (seed tetap)', detail: 'Demo: tidak ada data bursa.' },
+          { label: 'Trader', endpoint: 'Trader sintetis', detail: 'Demo: alamat bukan wallet sungguhan.' },
+        ]
+      : [
+          { label: 'Harga mark', endpoint: hl ? 'POST api.hyperliquid.xyz/info · allMids' : 'GET fapi.binance.com/fapi/v1/premiumIndex', detail: `Diambil tiap tick (${this.d.cfg.tickSeconds} detik); dipakai untuk eksekusi paper & nilai posisi.` },
+          { label: 'Posisi trader yang disalin', endpoint: 'POST api.hyperliquid.xyz/info · clearinghouseState', detail: 'Data publik on-chain; bisa dicek siapa saja lewat explorer di bawah.' },
+          { label: 'Funding', endpoint: hl ? 'POST api.hyperliquid.xyz/info · metaAndAssetCtxs' : 'GET fapi.binance.com/fapi/v1/premiumIndex', detail: hl ? 'Tarif per jam, dibebankan tiap jam.' : 'Tarif per 8 jam.' },
+          { label: 'Riwayat trader (scout & replay)', endpoint: 'POST api.hyperliquid.xyz/info · userFillsByTime, portfolio', detail: 'Fill & kurva PnL trader 7–30 hari.' },
+          { label: 'Leaderboard', endpoint: 'GET stats-data.hyperliquid.xyz/Mainnet/leaderboard', detail: 'Daftar awal kandidat trader.' },
+          { label: 'Candle turnamen strategi', endpoint: 'POST api.hyperliquid.xyz/info · candleSnapshot', detail: '1 jam; Hyperliquid menyimpan ±5000 candle terakhir.' },
+        ];
+    const leaders = (this.playbook?.leaders ?? []).map((l) => ({
+      address: l.address,
+      label: l.label,
+      explorer: l.address.startsWith('0x') && !synthetic ? `https://app.hyperliquid.xyz/explorer/address/${l.address}` : '',
+    }));
+    const lastLeaderSnapshots = [...this.lastSnap.values()].map((sn) => ({
+      address: sn.id,
+      ts: sn.ts,
+      equity: sn.equity,
+      positions: Object.entries(sn.positions).map(([coin, p]) => ({ coin, size: p.size, px: p.px })),
+    }));
+    return { sources, leaders, lastLeaderSnapshots, files: this.files, codeVersion: this.codeVersion };
   }
 
   private recordTrade(f: Fill, reason: string) {
@@ -488,6 +606,7 @@ export class Engine extends EventEmitter {
         netExposure: net,
         leverage: equity > 0 ? gross / equity : 0,
         feesPaid: this.d.broker.feesPaid(),
+        fundingPaid: this.d.broker.fundingPaid?.() ?? 0,
       },
       equityCurve: downsample(this.equity, 1500),
       weeklyReturns: weeklyFromCurve(this.equity),
@@ -508,6 +627,10 @@ export class Engine extends EventEmitter {
         leaderLagMs: this.leaderLag,
       },
       alerts: this.alerts.slice(0, 30),
+      statement: this.statement,
+      fundingLog: [...this.fundingLog].reverse().slice(0, 100),
+      provenance: this.provenance(),
+      replay: this.replay,
     };
   }
 }

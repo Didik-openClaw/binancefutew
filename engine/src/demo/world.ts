@@ -168,6 +168,11 @@ export class DemoWorld implements MarketHistory, PriceFeed {
     return DEMO_COINS.map((c) => c.coin);
   }
 
+  // Funding sintetis kecil (±0.01%/8 jam), dibebankan per jam virtual.
+  async fundingRates() {
+    return { rates: Object.fromEntries(DEMO_COINS.map((c, i) => [c.coin, 0.0000125 * (i % 3 === 0 ? -1 : 1)])), intervalHours: 1 };
+  }
+
   // ---- Leader virtual
   private traderCache = new Map<string, { bar: number; lev: Record<string, number>; equity: Float64Array }>();
 

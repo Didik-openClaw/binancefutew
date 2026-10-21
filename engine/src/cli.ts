@@ -11,9 +11,10 @@ import { PaperBroker } from './exchanges/paper';
 import type { Broker } from './exchanges/types';
 import { HOUR, sleep, WEEK } from './lib/time';
 import { RISK_PROFILES } from './risk/profiles';
-import { hyperliquidSource, runScout, type ScoutOptions, type ScoutResult } from './scout/hyperliquidScout';
+import { hyperliquidSource, isStandardPerp, runScout, type ScoutOptions, type ScoutResult } from './scout/hyperliquidScout';
 import { printScout, printTournament, printVerdict } from './report';
 import { runSelection } from './weekly';
+import { runReplay, weeklyBreakdown } from './replayCli';
 import { BinanceAccountLeader, HyperliquidWalletLeader } from './sources/leaders';
 import { Store } from './store';
 
@@ -67,7 +68,7 @@ async function main() {
   if (cmd === 'tournament' || cmd === 'hunt') {
     // hunt = turnamen strategi + scout trader, sama persis dengan siklus Senin di engine.
     const profile = RISK_PROFILES[cfg.riskProfile];
-    let market: MarketHistory = new RealMarket(join(cfg.dataDir, 'cache'), log);
+    let market: MarketHistory = new RealMarket(join(cfg.dataDir, 'cache'), log, cfg.dataSource);
     let scout: ((o: ScoutOptions) => Promise<ScoutResult>) | null = cmd === 'hunt' ? (o) => runScout(o, hyperliquidSource(), log) : null;
     let now = Date.now();
     let universe = cfg.universe;
@@ -79,17 +80,28 @@ async function main() {
       now = world.clock();
       universe = await world.listCoins();
     }
+    // Koin yang benar-benar bisa dieksekusi di venue (pasar HIP-3 "dex:COIN" & spot tidak didukung).
+    let supports = (c: string) => isStandardPerp(c);
+    if (!args.includes('--demo')) {
+      try {
+        const listed = new Set(await (cfg.venue === 'binance' ? new BinanceFeed() : new HyperliquidFeed()).listCoins());
+        if (listed.size) supports = (c) => listed.has(c);
+      } catch {
+        log('Daftar koin venue tidak bisa diambil; memakai saringan perp standar.');
+      }
+    }
     const sel = await runSelection({
       cfg: { ...cfg, universe },
       market,
       profile,
       feeRate: cfg.venue === 'hyperliquid' ? 0.00045 : 0.0005,
       scout,
-      supports: () => true,
+      supports,
       log,
       now,
     });
     if (sel.failedCoins.length) log(`Tanpa data: ${sel.failedCoins.join(', ')}`);
+    if (!sel.run) throw new Error('Turnamen tidak dijalankan');
     printTournament(sel.run);
     if (sel.scoutError) log(`Scout gagal: ${sel.scoutError}`);
     if (sel.leaders) printScout(sel.leaders, sel.scout);
@@ -106,10 +118,48 @@ async function main() {
     return;
   }
 
+  if (cmd === 'replay') {
+    // npm run replay -- 0xADDR [0xADDR2 ...] [--days=30] [--start=1000] [--entry=mirror|new-only]
+    const addrs = args.filter((a) => a.startsWith('0x'));
+    const opt = (k: string, d: string) => args.find((a) => a.startsWith(`--${k}=`))?.split('=')[1] ?? d;
+    const days = Number(opt('days', '30'));
+    const start = Number(opt('start', '1000'));
+    const entry = opt('entry', 'mirror') as 'mirror' | 'new-only';
+    const profile = RISK_PROFILES[cfg.riskProfile];
+    const mult = Number(opt('mult', String(profile.copyMultiplier)));
+    const dir = join(cfg.dataDir, 'state', 'replay');
+    for (const [i, a] of addrs.entries()) {
+      const { result: r, view } = await runReplay(a.toLowerCase(), days, profile, start, entry, dir, log, mult);
+      const wk = weeklyBreakdown(r.equity, r.equity[0]?.t ?? 0);
+      if (wk.length) console.log(`  minggu: ${wk.length}, profit ${wk.filter((w) => w.ret > 0).length}, terburuk ${(Math.min(...wk.map((w) => w.ret)) * 100).toFixed(1)}%, terbaik ${(Math.max(...wk.map((w) => w.ret)) * 100).toFixed(1)}%, rata-rata ${((wk.reduce((x, w) => x + w.ret, 0) / wk.length) * 100).toFixed(1)}%`);
+      // --save-view: replay alamat pertama ditampilkan di dashboard (data/state/replay.json).
+      if (i === 0 && args.includes('--save-view')) {
+        const store = new Store(join(cfg.dataDir, 'state'));
+        const known = store.readJson<{ address: string; label: string }[]>('leaders', []).find((l) => l.address === view.leader);
+        store.writeJson('replay', { ...view, label: known?.label ?? view.label });
+      }
+      const s = r.stats;
+      console.log(
+        `${a}  ${days}h ${entry} x${mult}: $${s.startEquity.toFixed(0)} -> $${s.endEquity.toFixed(2)} (${(s.totalReturn * 100).toFixed(1)}%), maxDD ${(s.maxDrawdown * 100).toFixed(1)}%, ${s.trades} order, fee $${s.fees.toFixed(2)}, funding $${s.funding.toFixed(2)}, kill switch ${s.killSwitchHits}x, leader ${(s.leaderReturn * 100).toFixed(1)}%`,
+      );
+    }
+    return;
+  }
+
   if (cmd === 'scout') {
     const profile = RISK_PROFILES[cfg.riskProfile];
-    const r = await runScout({ ...cfg.scout, slots: profile.leaderSlots, concentration: profile.concentration }, hyperliquidSource(), log);
+    let supports = isStandardPerp;
+    try {
+      const listed = new Set(await (cfg.venue === 'binance' ? new BinanceFeed() : new HyperliquidFeed()).listCoins());
+      if (listed.size) supports = (c) => listed.has(c);
+    } catch {
+      log('Daftar koin venue tidak bisa diambil; memakai saringan perp standar.');
+    }
+    const r = await runScout({ ...cfg.scout, slots: cfg.leaderSlots ?? profile.leaderSlots, concentration: profile.concentration, supports }, hyperliquidSource(), log);
     printScout(r.leaders, r.summary);
+    const store = new Store(join(cfg.dataDir, 'state'));
+    store.writeJson('leaders', r.leaders);
+    store.writeJson('scout', r.summary);
     return;
   }
 
@@ -139,7 +189,7 @@ async function main() {
         cfg,
         broker,
         store,
-        market: new RealMarket(join(cfg.dataDir, 'cache'), log),
+        market: new RealMarket(join(cfg.dataDir, 'cache'), log, cfg.dataSource),
         clock: Date.now,
         leaderSource: (address, label) =>
           address === BINANCE_LEADER_ID && cfg.binanceLeader
@@ -168,7 +218,7 @@ async function main() {
     return;
   }
 
-  console.log('Perintah: run [--demo] | hunt [--demo] | tournament [--demo] | scout | demo-snapshot [--out=path]');
+  console.log('Perintah: run [--demo] | hunt [--demo] | tournament [--demo] | scout | replay 0xADDR [--days=30] [--start=1000] | demo-snapshot [--out=path]');
 }
 
 main().catch((e) => {

@@ -43,6 +43,7 @@ const Env = z.object({
   UNIVERSE: list,
   BENCHMARK: z.string().optional(),
   STRATEGY_INTERVAL: z.string().optional(),
+  DATA_SOURCE: z.enum(['auto', 'binance', 'hyperliquid']).optional(),
   LOOKBACK_WEEKS: num,
   WALKFORWARD_WEEKS: num,
   TICK_SECONDS: num,
@@ -54,6 +55,9 @@ const Env = z.object({
   SCOUT_MAX_FILLS_PER_DAY: num,
   SCOUT_MAX_DRAWDOWN: num,
   SCOUT_DEEP_DIVE: num,
+  SCOUT_EXHAUSTIVE: bool,
+  CYCLE_ANCHOR: z.enum(['monday', 'start']).optional(),
+  LEADER_SLOTS: num,
   API_HOST: z.string().optional(),
   API_PORT: num,
   DASHBOARD_TOKEN: z.string().optional(),
@@ -84,6 +88,10 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}) {
       testnet: e.HL_TESTNET ?? false,
     },
     riskProfile: e.RISK_PROFILE ?? 'bold',
+    // Jumlah trader yang disalin (default mengikuti profil risiko).
+    leaderSlots: e.LEADER_SLOTS,
+    // monday = siklus Senin 00:00 UTC; start = 7 hari sejak seleksi dijalankan.
+    cycleAnchor: e.CYCLE_ANCHOR ?? 'monday',
     paperStartEquity: e.PAPER_START_EQUITY ?? 10_000,
     // Akun Binance sumber sinyal (API key read-only) disalin sebagai leader manual "binance:leader".
     binanceLeader: e.BINANCE_LEADER_API_KEY && e.BINANCE_LEADER_API_SECRET ? { apiKey: e.BINANCE_LEADER_API_KEY, apiSecret: e.BINANCE_LEADER_API_SECRET } : null,
@@ -95,6 +103,8 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}) {
     universe: e.UNIVERSE ?? ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'BNB', 'SUI', 'AVAX', 'LINK', 'LTC', 'ADA', 'HYPE'],
     benchmark: e.BENCHMARK ?? 'BTC',
     strategyInterval: e.STRATEGY_INTERVAL ?? '1h',
+    // auto = Binance (riwayat panjang), pindah ke Hyperliquid bila Binance menolak lokasi server.
+    dataSource: e.DATA_SOURCE ?? 'auto',
     lookbackWeeks: e.LOOKBACK_WEEKS ?? 12,
     walkForwardWeeks: e.WALKFORWARD_WEEKS ?? 26,
     tickSeconds: e.TICK_SECONDS ?? 10,
@@ -107,6 +117,8 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}) {
       maxFillsPerDay: e.SCOUT_MAX_FILLS_PER_DAY ?? 150,
       maxDrawdown: e.SCOUT_MAX_DRAWDOWN ?? 0.45,
       deepDive: e.SCOUT_DEEP_DIVE ?? 40,
+      // true = analisis semua kandidat sampai batas deepDive, tidak berhenti saat slot terisi.
+      exhaustive: e.SCOUT_EXHAUSTIVE ?? false,
     },
     api: {
       host: e.API_HOST ?? '127.0.0.1',

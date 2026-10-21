@@ -200,6 +200,7 @@ export interface AccountSummary {
   netExposure: number;
   leverage: number;
   feesPaid: number;
+  fundingPaid: number;
 }
 
 export interface EngineStatus {
@@ -210,6 +211,64 @@ export interface EngineStatus {
   nextRebalance: number;
   nextStrategyBar: number;
   leaderLagMs: number | null;
+}
+
+// Laporan akun yang bisa diaudit: semua angka diturunkan dari ledger trade + funding + harga mark.
+export interface StatementView {
+  periodStart: number;
+  periodEnd: number;
+  startEquity: number;
+  realized: number;
+  fees: number;
+  funding: number; // positif = dibayar
+  unrealized: number;
+  endEquity: number;
+  netPnl: number;
+  tradeCount: number;
+  fundingEvents: number;
+  reconciled: boolean; // ekuitas hasil hitung ulang ledger == ekuitas engine (selisih < $0.01)
+  ledgerEquity: number;
+  diff: number;
+  checkedAt: number;
+}
+
+export interface FundingEntry {
+  t: number;
+  coin: string;
+  size: number;
+  mark: number;
+  rate: number;
+  amount: number; // positif = dibayar
+}
+
+export interface ProvenanceView {
+  sources: { label: string; endpoint: string; detail: string }[];
+  leaders: { address: string; label: string; explorer: string }[];
+  lastLeaderSnapshots: { address: string; ts: number; equity: number; positions: { coin: string; size: number; px: number }[] }[];
+  files: { name: string; sha256: string; lines: number }[];
+  codeVersion: string | null;
+}
+
+export interface ReplayView {
+  leader: string;
+  label: string;
+  days: number;
+  entryPolicy: 'mirror' | 'new-only';
+  from: number;
+  to: number;
+  startEquity: number;
+  endEquity: number;
+  totalReturn: number;
+  maxDrawdown: number;
+  fees: number;
+  funding: number;
+  trades: number;
+  killSwitchHits: number;
+  leaderReturn: number;
+  equity: EquityPoint[];
+  recentTrades: { t: number; coin: string; side: 'buy' | 'sell'; qty: number; px: number; fee: number; realizedPnl: number; reason: string }[];
+  inputsSha256: string;
+  assumptions: string[];
 }
 
 export interface DashboardSnapshot {
@@ -230,4 +289,8 @@ export interface DashboardSnapshot {
   risk: RiskState;
   status: EngineStatus;
   alerts: EngineAlert[];
+  statement: StatementView | null;
+  fundingLog: FundingEntry[];
+  provenance: ProvenanceView | null;
+  replay: ReplayView | null;
 }

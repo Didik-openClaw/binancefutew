@@ -1,6 +1,7 @@
 import { binanceExchangeInfo, binanceMarkPrices, BINANCE_FAPI } from '../data/binancePublic';
 import { HyperliquidInfo } from '../data/hyperliquidInfo';
 import { fromBinanceSymbol } from '../data/symbols';
+import { fetchJson } from '../lib/http';
 import type { PriceFeed } from './types';
 
 // Cache singkat supaya satu tick tidak memanggil endpoint harga berkali-kali.
@@ -30,6 +31,10 @@ export class HyperliquidFeed extends CachedFeed {
   async listCoins() {
     return (await this.info.meta()).filter((u) => !u.isDelisted).map((u) => u.name);
   }
+  async fundingRates() {
+    const meta = await this.info.meta();
+    return { rates: Object.fromEntries(meta.filter((u) => Number.isFinite(u.funding)).map((u) => [u.name, u.funding])), intervalHours: 1 };
+  }
 }
 
 export class BinanceFeed extends CachedFeed {
@@ -44,6 +49,15 @@ export class BinanceFeed extends CachedFeed {
       if (coin) out[coin] = px;
     }
     return out;
+  }
+  async fundingRates() {
+    const rows = await fetchJson<{ symbol: string; lastFundingRate: string }[]>(`${this.base}/fapi/v1/premiumIndex`);
+    const rates: Record<string, number> = {};
+    for (const r of rows) {
+      const coin = fromBinanceSymbol(r.symbol);
+      if (coin) rates[coin] = Number(r.lastFundingRate);
+    }
+    return { rates, intervalHours: 8 };
   }
   async listCoins() {
     const info = await binanceExchangeInfo(this.base);

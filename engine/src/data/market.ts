@@ -5,6 +5,7 @@ import { buildDataset } from './dataset';
 import { BINANCE_FAPI } from './binancePublic';
 import { fundingPerBar, loadHistory } from './history';
 import { fromBinanceSymbol } from './symbols';
+import { HyperliquidInfo } from './hyperliquidInfo';
 import { fetchJson } from '../lib/http';
 
 // Penyedia data historis untuk turnamen dan sleeve strategi.
@@ -16,15 +17,34 @@ export interface MarketHistory {
 }
 
 // Data asli: Binance (riwayat lebih panjang), koin yang tidak ada di Binance diambil dari Hyperliquid.
+export type DataSource = 'auto' | 'binance' | 'hyperliquid';
+
 export class RealMarket implements MarketHistory {
+  private binanceBlocked = false;
+
   constructor(
     private cacheDir: string,
     private log: (m: string) => void = () => {},
-  ) {}
+    private source: DataSource = 'auto',
+  ) {
+    if (source === 'hyperliquid') this.binanceBlocked = true;
+  }
 
   private async load(coins: string[], interval: string, weeks: number, withFunding: boolean) {
     const cacheDir = join(this.cacheDir, 'candles');
-    const bn = await loadHistory({ coins, interval, weeks, source: 'binance', cacheDir, withFunding, log: this.log });
+    const empty = { raw: {}, funding: {}, failed: coins.map((coin) => ({ coin, error: 'Binance dilewati' })) };
+    let bn: Awaited<ReturnType<typeof loadHistory>> = empty;
+    if (!this.binanceBlocked && coins.length) {
+      // Coba satu koin dulu: Binance menolak IP dari beberapa negara (HTTP 451/403) untuk semua simbol.
+      const probe = await loadHistory({ coins: coins.slice(0, 1), interval, weeks, source: 'binance', cacheDir, withFunding, log: this.log });
+      if (probe.failed.some((f) => /HTTP (451|403)/.test(f.error)) && this.source === 'auto') {
+        this.binanceBlocked = true;
+        this.log('Binance menolak lokasi server ini (HTTP 451/403); semua data diambil dari Hyperliquid.');
+      } else {
+        const rest = await loadHistory({ coins: coins.slice(1), interval, weeks, source: 'binance', cacheDir, withFunding, log: this.log });
+        bn = { raw: { ...probe.raw, ...rest.raw }, funding: { ...probe.funding, ...rest.funding }, failed: [...probe.failed, ...rest.failed] };
+      }
+    }
     const missing = bn.failed.map((f) => f.coin);
     if (missing.length) {
       this.log(`Mencoba Hyperliquid untuk: ${missing.join(', ')}`);
@@ -43,8 +63,16 @@ export class RealMarket implements MarketHistory {
   }
 
   async topCoins(n: number) {
-    const rows = await fetchJson<{ symbol: string; quoteVolume: string }[]>(`${BINANCE_FAPI}/fapi/v1/ticker/24hr`);
     const stable = new Set(['USDC', 'FDUSD', 'TUSD', 'USDP', 'DAI', 'BUSD', 'USDE']);
+    if (this.binanceBlocked) {
+      const meta = await new HyperliquidInfo().meta();
+      return meta
+        .filter((m) => !m.isDelisted && !stable.has(m.name))
+        .sort((a, b) => b.dayVolume - a.dayVolume)
+        .slice(0, n)
+        .map((m) => m.name);
+    }
+    const rows = await fetchJson<{ symbol: string; quoteVolume: string }[]>(`${BINANCE_FAPI}/fapi/v1/ticker/24hr`);
     return rows
       .map((r) => ({ coin: fromBinanceSymbol(r.symbol), vol: Number(r.quoteVolume) }))
       .filter((r): r is { coin: string; vol: number } => !!r.coin && !stable.has(r.coin))

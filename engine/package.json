@@ -11,7 +11,8 @@
     "scout": "tsx src/cli.ts scout",
     "demo:snapshot": "tsx src/cli.ts demo-snapshot",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "replay": "tsx src/cli.ts replay"
   },
   "dependencies": {
     "ccxt": "4.5.75",

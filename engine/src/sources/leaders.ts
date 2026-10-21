@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { BINANCE_FAPI } from '../data/binancePublic';
-import { HyperliquidInfo } from '../data/hyperliquidInfo';
+import { HyperliquidInfo, tradingEquity } from '../data/hyperliquidInfo';
 import { fromBinanceSymbol } from '../data/symbols';
 import { fetchJson } from '../lib/http';
 
@@ -33,15 +33,20 @@ export class HyperliquidWalletLeader implements LeaderSource {
     this.label = label ?? `${id.slice(0, 6)}…${id.slice(-4)}`;
   }
 
+  private mode: { value: string; at: number } | null = null;
+
   async fetch(): Promise<LeaderSnapshot> {
     const s = await this.info.clearinghouseState(this.id);
+    // Jenis akun jarang berubah; cek ulang tiap jam.
+    if (!this.mode || Date.now() - this.mode.at > 3_600_000) this.mode = { value: await this.info.userAbstraction(this.id).catch(() => 'default'), at: Date.now() };
+    const eq = await tradingEquity(this.info, this.id, s, this.mode.value);
     const positions: Record<string, LeaderPosition> = {};
     for (const { position: p } of s.assetPositions) {
       const size = Number(p.szi);
       if (!size) continue;
       positions[p.coin] = { size, px: Math.abs(Number(p.positionValue) / size) };
     }
-    return { id: this.id, equity: Number(s.marginSummary.accountValue), positions, ts: s.time ?? Date.now() };
+    return { id: this.id, equity: eq.equity, positions, ts: s.time ?? Date.now() };
   }
 }
 

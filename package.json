@@ -22,6 +22,7 @@
     "build": "npm run build -w dashboard",
     "build:single": "npm run build:single -w dashboard",
     "test": "npm test -w engine",
-    "typecheck": "npm run typecheck -w engine && npm run typecheck -w dashboard"
+    "typecheck": "npm run typecheck -w engine && npm run typecheck -w dashboard",
+    "replay": "npm run replay -w engine --"
   }
 }

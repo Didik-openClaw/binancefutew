@@ -21,8 +21,9 @@ export class RiskManager {
   }
 
   // Dipanggil tiap tick. Mengembalikan 'halt' bila kill switch baru saja terpicu.
-  update(equity: number, now: number): 'ok' | 'halt' | 'halted' {
-    const ws = weekStart(now);
+  // period = siklus yang berlaku (default minggu Senin–Senin UTC; bisa juga 7 hari sejak playbook dibuat).
+  update(equity: number, now: number, period?: { start: number; end: number }): 'ok' | 'halt' | 'halted' {
+    const ws = period?.start ?? weekStart(now);
     if (ws !== this.s.weekStart) {
       this.s.weekStart = ws;
       this.s.weekStartEquity = equity;
@@ -34,7 +35,7 @@ export class RiskManager {
       this.s.haltedUntil = null;
     }
     if (this.lossFraction(equity) >= this.profile.weeklyLossLimit) {
-      this.s.haltedUntil = nextWeekStart(now);
+      this.s.haltedUntil = period?.end ?? nextWeekStart(now);
       return 'halt';
     }
     return 'ok';

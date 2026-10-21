@@ -61,6 +61,15 @@ export class HyperliquidInfo {
     return this.info<HlClearinghouseState>({ type: 'clearinghouseState', user });
   }
 
+  // "default" | "unifiedAccount" | "portfolioMargin" | "dexAbstraction" | ...
+  userAbstraction(user: string) {
+    return this.info<string>({ type: 'userAbstraction', user });
+  }
+
+  spotClearinghouseState(user: string) {
+    return this.info<{ balances: { coin: string; total: string; hold: string; entryNtl: string }[] }>({ type: 'spotClearinghouseState', user });
+  }
+
   allMids() {
     return this.info<Record<string, string>>({ type: 'allMids' });
   }
@@ -126,4 +135,28 @@ export class HyperliquidInfo {
     // File leaderboard besar (puluhan MB); beri waktu unduh lebih lama.
     return fetchJson<{ leaderboardRows: HlLeaderboardRow[] }>(HL_LEADERBOARD, { signal: AbortSignal.timeout(120_000) }, 2);
   }
+}
+
+const STABLES = new Set(['USDC', 'USDT0', 'USDH', 'USDE', 'USDT']);
+
+export interface TradingEquity {
+  equity: number; // modal trading yang menanggung posisi perp
+  mode: string; // hasil userAbstraction
+  perpAccountValue: number;
+  stables: number;
+  upnl: number;
+  notional: number;
+}
+
+// Modal trading yang benar per jenis akun. Akun "unified" menaruh jaminan perp di saldo USDC spot,
+// sehingga marginSummary.accountValue jauh lebih kecil dari modal sebenarnya (leverage terbaca berlipat).
+export async function tradingEquity(info: HyperliquidInfo, user: string, state?: HlClearinghouseState, mode?: string): Promise<TradingEquity> {
+  const [st, abstraction] = await Promise.all([state ?? info.clearinghouseState(user), mode ?? info.userAbstraction(user).catch(() => 'default')]);
+  const perpAccountValue = Number(st.marginSummary.accountValue);
+  const notional = Number(st.marginSummary.totalNtlPos);
+  const upnl = st.assetPositions.reduce((a, p) => a + Number(p.position.unrealizedPnl), 0);
+  if (abstraction !== 'unifiedAccount' && abstraction !== 'portfolioMargin') return { equity: perpAccountValue, mode: abstraction, perpAccountValue, stables: 0, upnl, notional };
+  const spot = await info.spotClearinghouseState(user);
+  const stables = spot.balances.filter((b) => STABLES.has(b.coin)).reduce((a, b) => a + Number(b.total), 0);
+  return { equity: Math.max(perpAccountValue, stables + upnl), mode: abstraction, perpAccountValue, stables, upnl, notional };
 }

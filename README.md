@@ -123,6 +123,8 @@ Futures dengan leverage bisa menghabiskan modal. Tidak ada metode yang menjamin 
 
 Data & state disimpan di `data/` (cache candle, akun paper, trade, ekuitas).
 
+**Sumber data.** `DATA_SOURCE=auto` memakai Binance (riwayat 1 jam lebih panjang) dan otomatis pindah ke Hyperliquid bila Binance menolak lokasi server (HTTP 451, mis. server di AS). Hyperliquid hanya menyimpan ±5000 candle terakhir per interval (±29 minggu untuk 1 jam), jadi uji walk-forward lebih pendek. Di jaringan yang memakai proxy HTTP, jalankan dengan `NODE_USE_ENV_PROXY=1` supaya `fetch` bawaan Node memakai `HTTPS_PROXY`.
+
 ## Pengujian
 
 `npm test` menjalankan 39 test, termasuk:

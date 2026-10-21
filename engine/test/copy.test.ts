@@ -191,6 +191,13 @@ describe('engine end-to-end (dunia demo)', () => {
     expect(s.trades.length).toBeGreaterThan(0);
     expect(s.account.leverage).toBeLessThanOrEqual(RISK_PROFILES.bold.maxGrossLeverage + 0.5);
     expect(s.equityCurve.length).toBeGreaterThan(20);
+    // Statement: ekuitas hasil hitung ulang ledger (trade + funding) sama dengan ekuitas broker.
+    await engine.audit(world.clock());
+    const st = engine.snapshot().statement!;
+    expect(st.reconciled).toBe(true);
+    expect(Math.abs(st.diff)).toBeLessThan(0.01);
+    expect(st.tradeCount).toBe(s.trades.length);
+    expect(engine.snapshot().fundingLog.length).toBeGreaterThan(0);
   }, 60_000);
 });
 
@@ -264,6 +271,27 @@ describe('scout: cari sampai dapat', () => {
     const p = holdingProfile([f(0, 'B', 0, 0), f(5 * 60_000, 'A', 1, 10), f(10 * H, 'A', 0, 0), f(13 * H, 'B', -1, 30)]);
     expect(p.scalpShare).toBeCloseTo(10 / 40);
     expect(p.holdHours).toBeCloseTo(3);
+  });
+
+  it('win rate dihitung per trade, bukan per fill (take-profit bertahap tidak menggelembungkan win rate)', () => {
+    const f = (time: number, side: 'A' | 'B', start: number, sz: number, pnl: number) => ({ coin: 'ETH', px: '1', sz: String(sz), side, time, dir: '', startPosition: String(start), closedPnl: String(pnl), fee: '0', oid: 1, hash: '' });
+    const H = 3_600_000;
+    const m = fillMetrics(
+      [
+        // Trade 1: long 3, ditutup untung dalam 3 potongan.
+        f(0, 'B', 0, 3, 0),
+        f(1 * H, 'A', 3, 1, 5),
+        f(2 * H, 'A', 2, 1, 5),
+        f(3 * H, 'A', 1, 1, 5),
+        // Trade 2: long 1, ditutup rugi besar.
+        f(4 * H, 'B', 0, 1, 0),
+        f(9 * H, 'A', 1, 1, -40),
+      ],
+      7,
+    );
+    expect(m.winRate).toBeCloseTo(0.5); // per fill akan terlihat 3/4
+    expect(m.closingTrades).toBe(2);
+    expect(m.profitFactor).toBeCloseTo(15 / 40);
   });
 
   it('10 kandidat teratas ditolak (scalper) -> lanjut menggali sampai slot terisi', async () => {

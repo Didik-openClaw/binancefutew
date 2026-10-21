@@ -1,5 +1,5 @@
 import type { LeaderView, ScoutSummary } from '../../../shared/types';
-import { type HlFill, type HlLeaderboardRow, type HlPortfolio, HyperliquidInfo } from '../data/hyperliquidInfo';
+import { type HlFill, type HlLeaderboardRow, type HlPortfolio, HyperliquidInfo, tradingEquity } from '../data/hyperliquidInfo';
 import { sleep, WEEK } from '../lib/time';
 
 export interface Window {
@@ -29,6 +29,12 @@ export interface DeepMetrics {
   holdHours: number | null; // median lama posisi dipegang
   scalpShare: number | null; // porsi |PnL| dari posisi < 10 menit
   positiveDays: number | null; // porsi hari profit (30 hari)
+  unrealizedPnlShare?: number | null; // PnL belum direalisasi / nilai akun (negatif = sedang menahan rugi)
+  grossLeverage?: number | null; // total notional posisi / modal trading saat ini
+  accountMode?: string; // hasil userAbstraction
+  tradingEquity?: number; // modal trading sebenarnya (akun unified: saldo stablecoin spot)
+  trueWeekRoi?: number | null; // PnL perp 7 hari / modal trading di awal periode
+  trueMonthRoi?: number | null;
 }
 
 export interface ScoutOptions {
@@ -40,6 +46,7 @@ export interface ScoutOptions {
   slots: number;
   concentration: number;
   minWeekRoi?: number;
+  exhaustive?: boolean; // jangan berhenti saat slot terisi; analisis sampai batas deepDive
   supports?: (coin: string) => boolean;
 }
 
@@ -100,28 +107,33 @@ export function prefilter(rows: ParsedRow[], o: ScoutOptions, level: (typeof SCO
     .map((x) => x.r);
 }
 
+// Statistik menang/kalah dihitung per TRADE (buka -> tutup), bukan per fill: trader yang menutup
+// posisi untung dalam banyak potongan kecil akan terlihat ber-win rate ~100% bila dihitung per fill.
 export function fillMetrics(fills: HlFill[], days: number) {
+  const hp = holdingProfile(fills);
   const closing = fills.filter((f) => Number(f.closedPnl) !== 0);
-  const wins = closing.filter((f) => Number(f.closedPnl) > 0);
-  const gains = wins.reduce((a, f) => a + Number(f.closedPnl), 0);
-  const losses = closing.filter((f) => Number(f.closedPnl) < 0).reduce((a, f) => a - Number(f.closedPnl), 0);
-  const top = wins.reduce((m, f) => Math.max(m, Number(f.closedPnl)), 0);
+  const pnls = hp.trades.length ? hp.trades.map((t) => t.pnl) : closing.map((f) => Number(f.closedPnl));
+  const wins = pnls.filter((x) => x > 0);
+  const gains = wins.reduce((a, x) => a + x, 0);
+  const losses = -pnls.filter((x) => x < 0).reduce((a, x) => a + x, 0);
+  const top = wins.reduce((m, x) => Math.max(m, x), 0);
   const net = gains - losses;
   return {
-    winRate: closing.length ? wins.length / closing.length : null,
+    winRate: pnls.length ? wins.length / pnls.length : null,
     profitFactor: losses > 0 ? gains / losses : gains > 0 ? 10 : null,
     fillsPerDay: fills.length / days,
-    closingTrades: closing.length,
+    closingTrades: hp.trades.length || closing.length,
     topTradeShare: net > 0 ? Math.min(1, top / net) : 1,
     coins: [...new Set(fills.map((f) => f.coin))],
-    ...holdingProfile(fills),
+    holdHours: hp.holdHours,
+    scalpShare: hp.scalpShare,
   };
 }
 
 // Rekonstruksi posisi dari fill (startPosition + ukuran) untuk mengukur berapa lama posisi dipegang.
 // Trader yang untungnya dari scalping menit-an tidak bisa disalin dengan polling 10 detik.
-export function holdingProfile(fills: HlFill[]): { holdHours: number | null; scalpShare: number | null } {
-  if (!fills.length || fills.some((f) => f.startPosition === undefined)) return { holdHours: null, scalpShare: null };
+export function holdingProfile(fills: HlFill[]): { holdHours: number | null; scalpShare: number | null; trades: { hold: number; pnl: number }[] } {
+  if (!fills.length || fills.some((f) => f.startPosition === undefined)) return { holdHours: null, scalpShare: null, trades: [] };
   const sorted = [...fills].sort((a, b) => a.time - b.time);
   const open = new Map<string, { t: number; pnl: number }>();
   const trades: { hold: number; pnl: number }[] = [];
@@ -137,19 +149,21 @@ export function holdingProfile(fills: HlFill[]): { holdHours: number | null; sca
     }
     if (Math.abs(end) > 1e-12 && (start === 0 || Math.sign(end) !== Math.sign(start))) open.set(f.coin, { t: f.time, pnl: 0 });
   }
-  if (!trades.length) return { holdHours: null, scalpShare: null };
+  if (!trades.length) return { holdHours: null, scalpShare: null, trades };
   const holds = trades.map((t) => t.hold).sort((a, b) => a - b);
   const totalAbs = trades.reduce((a, t) => a + Math.abs(t.pnl), 0);
   const scalpAbs = trades.filter((t) => t.hold < 10 * 60_000).reduce((a, t) => a + Math.abs(t.pnl), 0);
-  return { holdHours: holds[Math.floor(holds.length / 2)] / 3_600_000, scalpShare: totalAbs > 0 ? scalpAbs / totalAbs : 0 };
+  return { holdHours: holds[Math.floor(holds.length / 2)] / 3_600_000, scalpShare: totalAbs > 0 ? scalpAbs / totalAbs : 0, trades };
 }
 
 // Drawdown bulan ini dari kurva PnL (tidak terganggu deposit/penarikan seperti accountValue).
-export function portfolioDrawdown(p: HlPortfolio, period = 'month'): number | null {
+// equityNow (opsional): modal trading saat ini, dipakai sebagai basis untuk kurva PnL perp akun unified.
+export function portfolioDrawdown(p: HlPortfolio, period = 'month', equityNow?: number): number | null {
   const entry = p.find(([k]) => k === period)?.[1];
   if (!entry || entry.pnlHistory.length < 2) return null;
+  const lastPnl = Number(entry.pnlHistory[entry.pnlHistory.length - 1][1]);
   const av0 = Number(entry.accountValueHistory[0]?.[1] ?? 0);
-  const base = av0 - Number(entry.pnlHistory[0][1]);
+  const base = equityNow !== undefined ? equityNow - lastPnl : av0 - Number(entry.pnlHistory[0][1]);
   let peak = -Infinity;
   let dd = 0;
   for (const [, pnlStr] of entry.pnlHistory) {
@@ -183,25 +197,45 @@ export function hyperliquidSource(info = new HyperliquidInfo()): ScoutSource {
         info.portfolio(address).catch(() => null),
         info.clearinghouseState(address),
       ]);
+      const eq = await tradingEquity(info, address, state);
+      const perpPnl = (period: string) => {
+        const h = portfolio?.find(([k]) => k === period)?.[1]?.pnlHistory;
+        return h?.length ? Number(h[h.length - 1][1]) - Number(h[0][1]) : null;
+      };
+      // ROI dari PnL perp terhadap modal trading di awal periode (bukan terhadap saldo perp yang bisa jauh lebih kecil).
+      const roi = (pnl: number | null) => (pnl === null || eq.equity - pnl <= 0 ? null : pnl / (eq.equity - pnl));
       return {
         ...fillMetrics(fills, 7),
-        maxDrawdown: portfolio ? portfolioDrawdown(portfolio) : null,
-        positiveDays: portfolio ? positiveDayShare(portfolio) : null,
+        maxDrawdown: portfolio ? portfolioDrawdown(portfolio, eq.mode === 'unifiedAccount' ? 'perpMonth' : 'month', eq.equity) : null,
+        positiveDays: portfolio ? positiveDayShare(portfolio, eq.mode === 'unifiedAccount' ? 'perpMonth' : 'month') : null,
         openPositions: state.assetPositions.filter((a) => Number(a.position.szi) !== 0).length,
+        unrealizedPnlShare: eq.equity > 0 ? eq.upnl / eq.equity : null,
+        grossLeverage: eq.equity > 0 ? eq.notional / eq.equity : null,
+        accountMode: eq.mode,
+        tradingEquity: eq.equity,
+        trueWeekRoi: roi(perpPnl('perpWeek')),
+        trueMonthRoi: roi(perpPnl('perpMonth')),
       };
     },
   };
 }
 
+// Perp standar Hyperliquid (bukan pasar HIP-3 "dex:COIN" atau spot "@123").
+export const isStandardPerp = (coin: string) => !coin.includes(':') && !coin.startsWith('@');
+
 export function rejectReason(r: ParsedRow, m: DeepMetrics, o: ScoutOptions): string | undefined {
   if (m.fillsPerDay > o.maxFillsPerDay) return `Terlalu sering trading (${m.fillsPerDay.toFixed(0)} fill/hari) — gaya bot, tidak bisa disalin tepat waktu`;
   if (m.scalpShare !== null && m.scalpShare > 0.5) return `${Math.round(m.scalpShare * 100)}% PnL dari posisi < 10 menit — scalping tidak bisa disalin`;
+  if (m.accountMode === 'portfolioMargin') return 'Akun portfolio margin: posisi perp terhubung hedge spot, tidak bisa disalin utuh';
   if (m.closingTrades < 3) return 'Bukti kurang: < 3 trade ditutup dalam 7 hari';
+  if (m.unrealizedPnlShare != null && m.unrealizedPnlShare < -0.2) return `Sedang menahan rugi belum direalisasi ${Math.round(-m.unrealizedPnlShare * 100)}% dari akun — pola menahan posisi rugi`;
+  if (m.grossLeverage != null && m.grossLeverage > 15) return `Leverage saat ini ${m.grossLeverage.toFixed(0)}× — terlalu berisiko untuk disalin`;
   if (m.maxDrawdown !== null && m.maxDrawdown > o.maxDrawdown) return `Drawdown bulanan ${(m.maxDrawdown * 100).toFixed(0)}% melebihi batas`;
   if (m.topTradeShare > 0.85 && r.week.pnl > 0) return 'Profit minggu ini hampir semua dari 1 trade — belum terbukti konsisten';
-  if (o.supports && m.coins.length) {
-    const ok = m.coins.filter((c) => o.supports!(c)).length / m.coins.length;
-    if (ok < 0.5) return 'Mayoritas koinnya tidak tersedia di venue eksekusi';
+  const supports = o.supports ?? isStandardPerp;
+  if (m.coins.length) {
+    const ok = m.coins.filter((c) => supports(c)).length / m.coins.length;
+    if (ok < 0.5) return `Mayoritas pasarnya tidak bisa dieksekusi di venue ini (${m.coins.filter((c) => !supports(c)).slice(0, 3).join(', ')})`;
   }
   return undefined;
 }
@@ -220,8 +254,10 @@ export function percentileRanks(xs: number[]): number[] {
 export function rankLeaders(items: { row: ParsedRow; m: DeepMetrics; reason?: string }[], o: ScoutOptions): LeaderView[] {
   const ok = items.filter((x) => !x.reason);
   const pr = (f: (x: (typeof ok)[number]) => number) => percentileRanks(ok.map(f));
-  const wk = pr((x) => x.row.week.roi);
-  const mo = pr((x) => x.row.month.roi);
+  const weekRoi = (x: (typeof items)[number]) => x.m.trueWeekRoi ?? x.row.week.roi;
+  const monthRoi = (x: (typeof items)[number]) => x.m.trueMonthRoi ?? x.row.month.roi;
+  const wk = pr(weekRoi);
+  const mo = pr(monthRoi);
   const wr = pr((x) => x.m.winRate ?? 0);
   const pf = pr((x) => x.m.profitFactor ?? 0);
   const dd = pr((x) => -(x.m.maxDrawdown ?? 0.5));
@@ -236,9 +272,9 @@ export function rankLeaders(items: { row: ParsedRow; m: DeepMetrics; reason?: st
   const view = (x: (typeof items)[number], score: number): LeaderView => ({
     address: x.row.address,
     label: x.row.label,
-    accountValue: x.row.accountValue,
-    weekRoi: x.row.week.roi,
-    monthRoi: x.row.month.roi,
+    accountValue: x.m.tradingEquity ?? x.row.accountValue,
+    weekRoi: weekRoi(x),
+    monthRoi: monthRoi(x),
     allTimePnl: x.row.allTime.pnl,
     winRate: x.m.winRate,
     maxDrawdown: x.m.maxDrawdown,
@@ -262,7 +298,7 @@ export async function runScout(o: ScoutOptions, source: ScoutSource, log: (m: st
   log('Mengunduh leaderboard…');
   const rows = await source.leaderboard();
   const analyzed = new Map<string, { row: ParsedRow; m: DeepMetrics; reason?: string }>();
-  const target = Math.max(o.slots * 2, o.slots + 2);
+  const target = o.exhaustive ? Infinity : Math.max(o.slots * 2, o.slots + 2);
   const qualifiedCount = () => [...analyzed.values()].filter((x) => !x.reason).length;
   let rounds = 0;
   let level: (typeof SCOUT_LEVELS)[number] = SCOUT_LEVELS[0];
