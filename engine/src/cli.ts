@@ -126,10 +126,21 @@ async function main() {
     const start = Number(opt('start', '1000'));
     const entry = opt('entry', 'mirror') as 'mirror' | 'new-only';
     const profile = RISK_PROFILES[cfg.riskProfile];
-    const mult = Number(opt('mult', String(profile.copyMultiplier)));
+    const mults = opt('mult', String(profile.copyMultiplier)).split(',').map(Number);
     const dir = join(cfg.dataDir, 'state', 'replay');
+    const summary: Record<string, unknown>[] = [];
     for (const [i, a] of addrs.entries()) {
-      const { result: r, view } = await runReplay(a.toLowerCase(), days, profile, start, entry, dir, log, mult);
+     let cached: Awaited<ReturnType<typeof runReplay>>['inputs'] | undefined;
+     for (const mult of mults) {
+      let out: Awaited<ReturnType<typeof runReplay>>;
+      try {
+        out = await runReplay(a.toLowerCase(), days, profile, start, entry, dir, log, mult, cached);
+      } catch (e) {
+        log(`  ${a}: replay gagal (${e instanceof Error ? e.message : e})`);
+        break;
+      }
+      cached = out.inputs;
+      const { result: r, view } = out;
       const wk = weeklyBreakdown(r.equity, r.equity[0]?.t ?? 0);
       if (wk.length) console.log(`  minggu: ${wk.length}, profit ${wk.filter((w) => w.ret > 0).length}, terburuk ${(Math.min(...wk.map((w) => w.ret)) * 100).toFixed(1)}%, terbaik ${(Math.max(...wk.map((w) => w.ret)) * 100).toFixed(1)}%, rata-rata ${((wk.reduce((x, w) => x + w.ret, 0) / wk.length) * 100).toFixed(1)}%`);
       // --save-view: replay alamat pertama ditampilkan di dashboard (data/state/replay.json).
@@ -140,9 +151,30 @@ async function main() {
       }
       const s = r.stats;
       console.log(
-        `${a}  ${days}h ${entry} x${mult}: $${s.startEquity.toFixed(0)} -> $${s.endEquity.toFixed(2)} (${(s.totalReturn * 100).toFixed(1)}%), maxDD ${(s.maxDrawdown * 100).toFixed(1)}%, ${s.trades} order, fee $${s.fees.toFixed(2)}, funding $${s.funding.toFixed(2)}, kill switch ${s.killSwitchHits}x, leader ${(s.leaderReturn * 100).toFixed(1)}%`,
+        `${a}  ${days}h ${entry} x${mult}: $${s.startEquity.toFixed(0)} -> $${s.endEquity.toFixed(2)} (${(s.totalReturn * 100).toFixed(1)}%), maxDD ${(s.maxDrawdown * 100).toFixed(1)}%, ${s.trades} order, fee $${s.fees.toFixed(2)}, funding $${s.funding.toFixed(2)}, kill switch ${s.killSwitchHits}x`,
       );
+      summary.push({
+        address: a.toLowerCase(),
+        mult,
+        days,
+        totalReturn: s.totalReturn,
+        maxDrawdown: s.maxDrawdown,
+        fees: s.fees,
+        funding: s.funding,
+        orders: s.trades,
+        killSwitchHits: s.killSwitchHits,
+        weeks: wk.length,
+        weeksUp: wk.filter((w) => w.ret > 0).length,
+        worstWeek: wk.length ? Math.min(...wk.map((w) => w.ret)) : null,
+        bestWeek: wk.length ? Math.max(...wk.map((w) => w.ret)) : null,
+        avgWeek: wk.length ? wk.reduce((x, w) => x + w.ret, 0) / wk.length : null,
+        firstFill: cached?.fills[0]?.time ?? null,
+        fills: cached?.fills.length ?? 0,
+      });
+     }
     }
+    const sumFile = opt('summary', '');
+    if (sumFile) writeFileSync(sumFile, JSON.stringify(summary, null, 1));
     return;
   }
 

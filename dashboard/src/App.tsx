@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Confirm } from './components/bits';
-import { IconDial, IconLedger, IconPeople, IconRidges, IconShield } from './components/icons';
+import { IconDial, IconLedger, IconPeople, IconRidges, IconSeal, IconShield } from './components/icons';
 import { countdown, dateTime, timeOnly } from './data/format';
 import { useSnapshot } from './data/useSnapshot';
 import { Journal } from './views/Journal';
@@ -8,12 +8,14 @@ import { Lab } from './views/Lab';
 import { Leaders } from './views/Leaders';
 import { Overview } from './views/Overview';
 import { Risk } from './views/Risk';
+import { Statement } from './views/Statement';
 
 const VIEWS = [
   { id: 'ringkasan', label: 'Ringkasan', icon: IconDial },
   { id: 'lab', label: 'Lab Strategi', icon: IconRidges },
   { id: 'trader', label: 'Trader', icon: IconPeople },
   { id: 'jurnal', label: 'Jurnal', icon: IconLedger },
+  { id: 'laporan', label: 'Laporan', icon: IconSeal },
   { id: 'risiko', label: 'Risiko', icon: IconShield },
 ] as const;
 
@@ -158,6 +160,7 @@ export default function App() {
         {view === 'lab' && <Lab snap={snap} />}
         {view === 'trader' && <Leaders snap={snap} />}
         {view === 'jurnal' && <Journal snap={snap} />}
+        {view === 'laporan' && <Statement snap={snap} />}
         {view === 'risiko' && <Risk snap={snap} conn={conn} act={act} />}
       </main>
 

@@ -42,3 +42,11 @@ export const IconExternal = () => (
     <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
   </svg>
 );
+
+export const IconSeal = () => (
+  <svg {...base}>
+    <circle cx="12" cy="10" r="6" />
+    <path d="M9.5 10l1.7 1.7L14.8 8.2" />
+    <path d="M8.5 15l-1.5 5.5L12 18l5 2.5L15.5 15" />
+  </svg>
+);

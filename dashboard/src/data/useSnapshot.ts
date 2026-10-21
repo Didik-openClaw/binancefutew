@@ -27,9 +27,23 @@ export function saveToken(t: string) {
 
 const STATIC_DEMO = import.meta.env.MODE === 'single';
 
+// Snapshot dari engine versi lama / demo lama mungkin belum punya field baru.
+export function normalize(s: DashboardSnapshot): DashboardSnapshot {
+  return {
+    ...s,
+    account: { ...s.account, fundingPaid: s.account.fundingPaid ?? 0 },
+    scout: s.scout ?? null,
+    statement: s.statement ?? null,
+    fundingLog: s.fundingLog ?? [],
+    provenance: s.provenance ?? null,
+    replay: s.replay ?? null,
+  };
+}
+
 // Sambung ke engine (REST + WebSocket). Tanpa engine -> snapshot demo sintetis.
 export function useSnapshot() {
-  const [snap, setSnap] = useState<DashboardSnapshot>(demo as unknown as DashboardSnapshot);
+  const [snap, setSnapRaw] = useState<DashboardSnapshot>(() => normalize(demo as unknown as DashboardSnapshot));
+  const setSnap = useCallback((s: DashboardSnapshot) => setSnapRaw(normalize(s)), []);
   const [conn, setConn] = useState<Connection>({ kind: 'demo' });
   const [token, setToken] = useState(readToken);
   const wsRef = useRef<WebSocket | null>(null);
