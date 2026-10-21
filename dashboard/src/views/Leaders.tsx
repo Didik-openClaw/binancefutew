@@ -17,7 +17,7 @@ export function Leaders({ snap }: { snap: DashboardSnapshot }) {
           </h1>
           <p>
             Semua posisi wallet Hyperliquid bersifat publik, jadi engine bisa menyalinnya tanpa izin siapa pun. Tiap Senin, leaderboard disaring lalu kandidat dianalisis mendalam per 20 trader (riwayat fill 7 hari, lama pegang
-            posisi, drawdown & hari profit 30 hari) sampai yang lolos cukup untuk diadu. Kandidat teratas lalu disalin ulang dari fill aslinya ({sc?.vetDays ?? 120} hari, $1.000, dengan biaya): hanya yang lolos uji salin
+            posisi, drawdown & hari profit 30 hari) sampai yang lolos cukup untuk diadu. Kandidat teratas lalu disalin ulang dari fill aslinya ({sc?.vetDays ?? 180} hari, $1.000, dengan biaya): hanya yang lolos uji salin
             ini yang boleh disalin, diurutkan menurut pertumbuhan mingguannya.
           </p>
         </div>
@@ -186,7 +186,7 @@ export function Leaders({ snap }: { snap: DashboardSnapshot }) {
               <span className="what">
                 Lolos uji salin historis
                 <small>
-                  $1.000 menyalin trader dari fill aslinya {sc?.vetDays ?? 120} hari ke belakang, dengan fee, slippage, keterlambatan, funding dan kill switch. Wajib aktif ≥ 8 minggu, untung, kill switch ≤ 1× per 10 minggu,
+                  $1.000 menyalin trader dari fill aslinya {sc?.vetDays ?? 180} hari ke belakang, dengan fee, slippage, keterlambatan, funding dan kill switch. Wajib aktif di ≥ separuh minggu, untung, kill switch ≤ 1× per 10 minggu,
                   drawdown ≤ 2× batas kill switch, PSR mingguan ≥ 0.8.
                 </small>
               </span>

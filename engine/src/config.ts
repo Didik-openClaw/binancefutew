@@ -125,7 +125,7 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}) {
       // true = analisis semua kandidat sampai batas deepDive, tidak berhenti saat slot terisi.
       exhaustive: e.SCOUT_EXHAUSTIVE ?? false,
       // Uji salin historis: kandidat teratas disalin ulang dari fill aslinya N hari ke belakang (0 = mati).
-      vetDays: e.SCOUT_VET_DAYS ?? 120,
+      vetDays: e.SCOUT_VET_DAYS ?? 180,
       vetTop: e.SCOUT_VET_TOP ?? 12,
     },
     api: {

@@ -96,7 +96,7 @@ export async function runSelection(x: SelectionDeps): Promise<SelectionResult> {
         log(`Uji salin historis: ${Math.min(cfg.scout.vetTop, r.summary.qualified)} kandidat teratas, ${days} hari, $1.000, pengali ${x.profile.copyMultiplier}`);
         const v = await vetLeaders(
           r.leaders,
-          { ...VET_DEFAULTS, days, top: cfg.scout.vetTop, minActiveWeeks: Math.min(VET_DEFAULTS.minActiveWeeks, Math.floor(days / 14)), replay: replayOptions(x.profile, 1000, cfg.entryPolicy) },
+          { ...VET_DEFAULTS, days, top: cfg.scout.vetTop, replay: replayOptions(x.profile, 1000, cfg.entryPolicy) },
           x.vetInputs(days),
           slots,
           x.profile.concentration,

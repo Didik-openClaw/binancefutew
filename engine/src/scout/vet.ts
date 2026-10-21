@@ -11,11 +11,13 @@ export interface VetOptions {
   days: number;
   top: number; // berapa kandidat teratas scout yang diuji
   replay: ReplayOptions;
-  minActiveWeeks: number; // minggu dengan order: menyaring trader yang baru aktif / jarang trading
+  minActiveShare: number; // porsi minggu dengan order: menyaring trader yang baru aktif / jarang trading
   minPsr: number; // peluang Sharpe mingguan > 0
 }
 
-export const VET_DEFAULTS = { days: 120, top: 12, minActiveWeeks: 8, minPsr: 0.8 };
+// 180 hari: jendela 120 hari meloloskan trader yang drawdown-nya 66% bila dilihat 200 hari.
+// Hyperliquid menyimpan ±208 hari candle 1 jam, jadi 180 hari masih menyisakan ruang.
+export const VET_DEFAULTS = { days: 180, top: 12, minActiveShare: 0.5, minPsr: 0.8 };
 
 export type FetchInputs = (address: string) => Promise<ReplayInputs>;
 
@@ -37,9 +39,10 @@ export function vetOne(address: string, inputs: ReplayInputs, o: VetOptions): Ve
   const growth = weekly.length && s.endEquity > 0 ? (s.endEquity / s.startEquity) ** (1 / weekly.length) - 1 : -1;
   const maxKills = Math.max(1, Math.floor(weekly.length / 10));
   const maxDd = Math.min(0.9, o.replay.killSwitch * 2);
+  const minActive = Math.ceil(o.minActiveShare * weekly.length);
   const reason =
-    active < o.minActiveWeeks
-      ? `aktif hanya ${active} dari ${weekly.length} minggu (min ${o.minActiveWeeks})`
+    active < minActive
+      ? `aktif hanya ${active} dari ${weekly.length} minggu (min ${minActive})`
       : s.totalReturn <= 0
         ? `rugi ${(s.totalReturn * 100).toFixed(1)}%`
         : s.killSwitchHits > maxKills
