@@ -253,6 +253,68 @@ export function replayCopy(inp: ReplayInputs, o: ReplayOptions): ReplayResult {
   };
 }
 
+// Potong input ke jendela [from, to]: posisi leader di dalam jendela tetap benar walau koin
+// tidak punya fill di dalamnya (posisi akhir jendela = startPosition fill pertama sesudahnya).
+export function sliceInputs(inp: ReplayInputs, from: number, to: number): ReplayInputs {
+  const fills = inp.fills.filter((f) => f.time >= from && f.time <= to);
+  const openAtEnd: Record<string, number> = {};
+  for (const c of new Set([...inp.fills.map((f) => f.coin), ...Object.keys(inp.openAtEnd)])) {
+    const next = inp.fills.find((f) => f.coin === c && f.time > to);
+    const size = next ? Number(next.startPosition ?? 0) : (inp.openAtEnd[c] ?? 0);
+    if (size) openAtEnd[c] = size;
+  }
+  return { ...inp, from, to, fills, openAtEnd };
+}
+
+export interface RollingStats {
+  days: number;
+  stepHours: number;
+  n: number;
+  median: number;
+  mean: number;
+  p10: number;
+  p25: number;
+  p75: number;
+  p90: number;
+  worst: number;
+  best: number;
+  lossShare: number; // porsi titik mulai yang berakhir rugi
+  killShare: number; // porsi titik mulai yang kena kill switch
+  medianMaxDrawdown: number;
+}
+
+// Semua kemungkinan "mulai hari ini": tiap stepHours, $startEquity mulai menyalin dari nol
+// (mirror posisi leader saat itu) selama `days` hari. Jawaban jujur untuk "kalau saya mulai minggu ini?".
+export function rollingStarts(inp: ReplayInputs, o: ReplayOptions, days = 7, stepHours = 24) {
+  const span = days * 24 * HOUR;
+  const first = Math.ceil(inp.from / HOUR) * HOUR;
+  const runs: { start: number; ret: number; maxDrawdown: number; killed: boolean }[] = [];
+  for (let t = first; t + span <= inp.to; t += stepHours * HOUR) {
+    const r = replayCopy(sliceInputs(inp, t, t + span), o);
+    runs.push({ start: t, ret: r.stats.totalReturn, maxDrawdown: r.stats.maxDrawdown, killed: r.stats.killSwitchHits > 0 });
+  }
+  const rets = runs.map((r) => r.ret).sort((a, b) => a - b);
+  const q = (p: number) => (rets.length ? rets[Math.min(rets.length - 1, Math.max(0, Math.round(p * (rets.length - 1))))] : 0);
+  const dds = runs.map((r) => r.maxDrawdown).sort((a, b) => a - b);
+  const stats: RollingStats = {
+    days,
+    stepHours,
+    n: runs.length,
+    median: q(0.5),
+    mean: rets.length ? rets.reduce((a, b) => a + b, 0) / rets.length : 0,
+    p10: q(0.1),
+    p25: q(0.25),
+    p75: q(0.75),
+    p90: q(0.9),
+    worst: rets[0] ?? 0,
+    best: rets[rets.length - 1] ?? 0,
+    lossShare: runs.length ? runs.filter((r) => r.ret < 0).length / runs.length : 0,
+    killShare: runs.length ? runs.filter((r) => r.killed).length / runs.length : 0,
+    medianMaxDrawdown: dds.length ? dds[Math.floor(dds.length / 2)] : 0,
+  };
+  return { runs, stats };
+}
+
 // Audit: hitung ulang ekuitas hanya dari ledger trade + harga, bandingkan dengan angka yang dilaporkan.
 export function auditLedger(
   startEquity: number,

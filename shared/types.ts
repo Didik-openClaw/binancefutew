@@ -292,6 +292,19 @@ export interface ReplayView {
   recentTrades: { t: number; coin: string; side: 'buy' | 'sell'; qty: number; px: number; fee: number; realizedPnl: number; reason: string }[];
   inputsSha256: string;
   assumptions: string[];
+  // Semua kemungkinan mulai: $startEquity menyalin 7 hari dari tiap hari dalam jendela.
+  rolling?: {
+    days: number;
+    n: number;
+    median: number;
+    p10: number;
+    p90: number;
+    worst: number;
+    best: number;
+    lossShare: number;
+    killShare: number;
+    medianMaxDrawdown: number;
+  };
 }
 
 export interface DashboardSnapshot {

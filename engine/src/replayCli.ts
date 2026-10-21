@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { replayCopy, type ReplayInputs, type ReplayOptions, type ReplayResult } from './backtest/copyReplay';
+import { replayCopy, rollingStarts, type ReplayInputs, type ReplayOptions, type ReplayResult } from './backtest/copyReplay';
 import { HyperliquidInfo, stableFlows, tradingEquity } from './data/hyperliquidInfo';
 import { isStandardPerp } from './scout/hyperliquidScout';
 import { DAY, HOUR } from './lib/time';
@@ -110,6 +110,7 @@ export async function runReplay(
   const inputs = cachedInputs ?? (await fetchReplayInputs(address, days, Date.now(), log, prevInputs));
   const options = replayOptions(profile, startEquity, entryPolicy, copyMultiplier);
   const result = replayCopy(inputs, options);
+  const rolling = rollingStarts(inputs, options, 7, 24).stats;
   mkdirSync(dir, { recursive: true });
   const inputsJson = JSON.stringify(inputs);
   writeFileSync(join(dir, `replay-${address}-${days}d-inputs.json`), inputsJson);
@@ -134,6 +135,7 @@ export async function runReplay(
     equity: result.equity,
     recentTrades: result.trades.slice(-150).reverse().map((t) => ({ t: t.t, coin: t.coin, side: t.side, qty: t.qty, px: t.px, fee: t.fee, realizedPnl: t.realizedPnl, reason: t.reason })),
     inputsSha256: createHash('sha256').update(inputsJson).digest('hex'),
+    rolling,
     assumptions: [
       `Posisi trader direkonstruksi dari ${inputs.fills.length} fill aslinya (startPosition + ukuran).`,
       inputs.equitySource === 'pnl+flows'

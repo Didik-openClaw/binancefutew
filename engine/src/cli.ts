@@ -154,6 +154,11 @@ async function main() {
         store.writeJson('replay', { ...view, label: known?.label ?? view.label });
       }
       const s = r.stats;
+      const rl = view.rolling;
+      if (rl)
+        console.log(
+          `  mulai kapan saja, 7 hari (${rl.n} titik mulai): median ${(rl.median * 100).toFixed(1)}%, 10% terburuk ≤ ${(rl.p10 * 100).toFixed(1)}%, 10% terbaik ≥ ${(rl.p90 * 100).toFixed(1)}%, rugi ${(rl.lossShare * 100).toFixed(0)}%, kena kill switch ${(rl.killShare * 100).toFixed(0)}%`,
+        );
       console.log(
         `${a}  ${days}h ${entry} x${mult}: $${s.startEquity.toFixed(0)} -> $${s.endEquity.toFixed(2)} (${(s.totalReturn * 100).toFixed(1)}%), maxDD ${(s.maxDrawdown * 100).toFixed(1)}%, ${s.trades} order, fee $${s.fees.toFixed(2)}, funding $${s.funding.toFixed(2)}, kill switch ${s.killSwitchHits}x`,
       );
@@ -172,6 +177,7 @@ async function main() {
         worstWeek: wk.length ? Math.min(...wk.map((w) => w.ret)) : null,
         bestWeek: wk.length ? Math.max(...wk.map((w) => w.ret)) : null,
         avgWeek: wk.length ? wk.reduce((x, w) => x + w.ret, 0) / wk.length : null,
+        rolling7d: view.rolling ?? null,
         firstFill: cached?.fills[0]?.time ?? null,
         fills: cached?.fills.length ?? 0,
       });

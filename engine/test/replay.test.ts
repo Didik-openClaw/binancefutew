@@ -110,6 +110,33 @@ describe('replay copy trading', () => {
   });
 });
 
+describe('mulai kapan saja', () => {
+  it('jendela potongan memakai posisi leader yang benar walau tidak ada fill di dalamnya', async () => {
+    const { sliceInputs, rollingStarts } = await import('../src/backtest/copyReplay');
+    const prices = Array.from({ length: 24 * 20 + 1 }, (_, i) => 100 + i * 0.01);
+    // Leader long 5 BTC dari jam 1 sampai hari ke-15.
+    const inp: ReplayInputs = {
+      leader: '0xabc',
+      from: T0,
+      to: T0 + 20 * 24 * H,
+      fills: [fill(T0 + H, 'B', 0, 5, 100), fill(T0 + 15 * 24 * H, 'A', 5, 5, 103.6)],
+      leaderEquity: [[T0, 1000]],
+      openAtEnd: {},
+      candles: { BTC: candles(prices) },
+      funding: {},
+    };
+    const mid = sliceInputs(inp, T0 + 3 * 24 * H, T0 + 10 * 24 * H);
+    expect(mid.fills.length).toBe(0);
+    expect(mid.openAtEnd).toEqual({ BTC: 5 });
+    const r = replayCopy(mid, opts);
+    expect(r.trades[0].reason).toBe('posisi awal leader');
+    expect(r.stats.totalReturn).toBeGreaterThan(0);
+    const roll = rollingStarts(inp, opts, 7, 24);
+    expect(roll.stats.n).toBe(14);
+    expect(roll.stats.lossShare).toBeLessThan(0.5);
+  });
+});
+
 describe('arus dana akun unified', () => {
   it('menghitung deposit, penarikan, kiriman stablecoin, dan belanja spot; mengabaikan token non-stable & pindah antar-dex', async () => {
     const { stableFlows } = await import('../src/data/hyperliquidInfo');
