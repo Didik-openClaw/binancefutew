@@ -8,3 +8,4 @@ data/state/
 *.log
 .DS_Store
 dist-single/
+.claude/worktrees/
