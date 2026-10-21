@@ -1,40 +1,90 @@
-/* Layout: rel navigasi kiri + kanvas kerja; tiap halaman dibuka "pelat" utama (angka + instrumen 3D),
-   lalu detail di grid 12 kolom. Tema gelap satu dunia (ruang trading privat, kuningan & grafit). */
+/* Grand-Feu Minuit — salon pembuat jam: pelat enamel biru tengah malam dalam bezel emas, satu
+   finishing per keluarga komponen (rel = Clous de Paris, top bar = Côtes de Genève, hero = flinqué,
+   profil aktif = perlage, sisanya enamel polos). Tidak ada tekstur di belakang angka, tabel, atau grafik.
+   Angka tidak pernah dianimasikan; hanya instrumen yang bergerak. */
 :root {
   color-scheme: dark;
-  --ink: #0c0d0f;
-  --plate: #121417;
-  --plate-2: #171a1e;
-  --rule: #24272c;
-  --rule-soft: #1b1e22;
-  --ivory: #ece6da;
-  --ivory-2: #bdb6aa;
-  --muted: #868076;
-  --brass: #cdae6e;
-  --brass-dim: #8f7748;
-  --series-1: #b48b39;
-  --series-2: #3a80b7;
-  --up: #2ea37a;
-  --up-text: #52c79a;
-  --down: #d15d51;
-  --down-text: #e88173;
-  --warn: #c87f2c;
-  --warn-text: #e3a35a;
 
-  --f-display: 'Bodoni Moda', 'Bodoni 72', Didot, Georgia, serif;
-  --f-ui: 'Geist', 'Helvetica Neue', Arial, sans-serif;
+  /* tanah & enamel */
+  --night-0: #07090e;
+  --night-1: #0a0e17;
+  --enamel: #0e1421;
+  --enamel-hi: #131b2b;
+  --enamel-lo: #0a0f19;
+  --aperture: #060911;
+
+  /* garis */
+  --hair: rgba(239, 231, 214, 0.07);
+  --hair-gold: rgba(214, 178, 112, 0.2);
+
+  /* teks */
+  --ivory: #efe7d6;
+  --ivory-2: #c4bcaa;
+  --muted: #8e8878;
+
+  /* logam */
+  --gold: #d6b270;
+  --gold-hi: #f3dfae;
+  --gold-lo: #a9874b;
+  --gold-deep: #6b5128;
+  --rose: #d39c80;
+  --rose-hi: #f0c6ae;
+  --rose-lo: #8e5c45;
+  --steel: #7fa6e6;
+  --steel-deep: #2b4f9e;
+
+  /* data */
+  --up: #3a9e7a;
+  --up-text: #5cc49a;
+  --down: #c4564b;
+  --down-text: #ec8576;
+  --warn: #c98a3e;
+  --warn-text: #e2a85a;
+
+  /* batu permata status */
+  --jewel-ruby: #d0454d;
+  --jewel-emerald: #3fb58a;
+  --jewel-citrine: #e2a24a;
+  --jewel-rhodium: #c9ced6;
+
+  /* alias lama (komponen yang belum diubah tetap konsisten) */
+  --ink: var(--night-0);
+  --plate: var(--enamel);
+  --plate-2: var(--enamel-hi);
+  --rule: rgba(214, 178, 112, 0.2);
+  --rule-soft: var(--hair);
+  --brass: var(--gold);
+  --brass-dim: var(--gold-lo);
+  --series-1: var(--gold);
+  --series-2: var(--steel);
+
+  --f-display: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+  --f-engr: 'Marcellus SC', Optima, Candara, serif;
+  --f-ui: 'Instrument Sans', 'Helvetica Neue', Arial, sans-serif;
   --f-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
-  --t-hero: clamp(2.6rem, 5.2vw, 4.25rem);
-  --t-title: clamp(1.9rem, 3vw, 2.6rem);
-  --t-h3: 1.05rem;
-  --t-body: 0.875rem;
-  --t-small: 0.78rem;
-  --t-label: 0.68rem;
+  --t-hero: clamp(3rem, 6.2vw, 5.75rem);
+  --t-title: clamp(2rem, 3.4vw, 3rem);
+  --t-h3: 1.3rem;
+  --t-body: 14px;
+  --t-small: 12.5px;
+  --t-label: 12.5px;
 
-  --gap: clamp(14px, 1.6vw, 22px);
-  --radius: 3px;
-  --nav-w: 216px;
+  --gap: clamp(14px, 1.6vw, 20px);
+  --radius: 8px;
+  --nav-w: 232px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-crown: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --clous: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M0 0L5 5L10 0Z' fill='%23fff' fill-opacity='.022'/%3E%3Cpath d='M10 0L5 5L10 10Z' fill='%23fff' fill-opacity='.008'/%3E%3Cpath d='M0 10L5 5L10 10Z' fill='%23000' fill-opacity='.14'/%3E%3Cpath d='M0 0L5 5L0 10Z' fill='%23000' fill-opacity='.05'/%3E%3C/svg%3E");
+  --polished-gold: linear-gradient(180deg, #f6e7c1 0%, #dcbd80 38%, #9c7638 52%, #c9a462 64%, #efdcab 100%);
+  --polished-rose: linear-gradient(180deg, #f0c6ae, #d39c80 45%, #8e5c45 55%, #f0c6ae);
+  --enamel-plate: var(--grain), linear-gradient(180deg, rgba(255, 244, 222, 0.028) 0%, rgba(255, 244, 222, 0) 34%),
+    radial-gradient(130% 120% at 50% -10%, var(--enamel-hi) 0%, var(--enamel) 52%, var(--enamel-lo) 100%);
+  --bezel: inset 0 0 0 3px var(--night-1), inset 0 0 0 4px rgba(214, 178, 112, 0.07), 0 30px 60px -30px rgba(0, 0, 0, 0.85);
+  --aperture-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(214, 178, 112, 0.18), 0 1px 0 rgba(255, 236, 200, 0.05);
 }
 
 * {
@@ -44,16 +94,20 @@
 html,
 body {
   margin: 0;
-  background: var(--ink);
   color: var(--ivory);
   font-family: var(--f-ui);
-  font-size: 16px;
   -webkit-font-smoothing: antialiased;
 }
 
 body {
   font-size: var(--t-body);
-  line-height: 1.5;
+  line-height: 1.55;
+  background:
+    radial-gradient(1400px 800px at 10% -12%, rgba(214, 178, 112, 0.065), transparent 62%),
+    radial-gradient(1000px 900px at 100% 110%, rgba(79, 127, 207, 0.05), transparent 60%),
+    var(--night-0);
+  background-attachment: fixed;
+  background-color: var(--night-0);
 }
 
 body::before {
@@ -62,7 +116,7 @@ body::before {
   inset: 0 0 auto;
   height: env(safe-area-inset-top, 0px);
   z-index: 10;
-  background: var(--ink);
+  background: var(--night-0);
 }
 
 a {
@@ -74,21 +128,99 @@ button {
   color: inherit;
 }
 
-:focus-visible {
-  outline: 1px solid var(--brass);
-  outline-offset: 2px;
+code {
+  font-family: var(--f-mono);
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--aperture);
+  box-shadow: inset 0 0 0 1px rgba(214, 178, 112, 0.14);
+  overflow-wrap: anywhere;
 }
 
+:focus-visible {
+  outline: 1px solid var(--gold);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(214, 178, 112, 0.18);
+}
+
+::selection {
+  background: rgba(214, 178, 112, 0.28);
+}
+
+/* Sudut anglage (bevel tangan) di Chromium; fallback sudut tajam 2px. */
+.panel,
+.btn,
+.aperture,
+.nav a,
+.dialog,
+.seg,
+.toast,
+.demo-banner,
+.tooltip,
+.profile,
+select,
+input {
+  border-radius: 2px;
+}
+
+@supports (corner-shape: bevel) {
+  .panel,
+  .profile,
+  .dialog {
+    border-radius: 8px;
+    corner-shape: bevel;
+  }
+
+  .btn,
+  .nav a,
+  .seg,
+  .toast,
+  .demo-banner,
+  select,
+  input {
+    border-radius: 6px;
+    corner-shape: bevel;
+  }
+
+  .aperture,
+  .tooltip {
+    border-radius: 4px;
+    corner-shape: bevel;
+  }
+}
+
+/* ------------------------------------------------------------------ tipografi dasar */
 .num {
+  font-family: var(--f-ui);
   font-variant-numeric: tabular-nums;
 }
 
-.label {
-  font-family: var(--f-mono);
+/* Label ukir: Marcellus SC huruf kecil = small caps seragam. Angka di dalamnya WAJIB dibungkus .num. */
+.label,
+.engr,
+.kicker {
+  font-family: var(--f-engr);
   font-size: var(--t-label);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: lowercase;
+  color: var(--gold-lo);
+  text-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.75),
+    0 1px 0 rgba(255, 236, 200, 0.06);
+}
+
+.label .num,
+.engr .num,
+.kicker .num,
+.chip .num {
+  font-family: var(--f-ui);
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 12.5px;
+  color: var(--ivory-2);
+  text-shadow: none;
 }
 
 .up {
@@ -101,6 +233,90 @@ button {
 
 .flat {
   color: var(--ivory-2);
+}
+
+.mono {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+/* Batu cabochon dalam setting emas (pengganti titik status datar). Tidak berkedip. */
+.jewel {
+  --c: var(--jewel-rhodium);
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff 0 9%, var(--c) 42%, color-mix(in srgb, var(--c) 45%, #000) 100%);
+  box-shadow:
+    0 0 0 1px rgba(214, 178, 112, 0.55),
+    0 0 0 2px rgba(0, 0, 0, 0.6);
+}
+
+.jewel.ruby {
+  --c: var(--jewel-ruby);
+}
+
+.jewel.emerald {
+  --c: var(--jewel-emerald);
+}
+
+.jewel.citrine {
+  --c: var(--jewel-citrine);
+}
+
+.jewel.gold {
+  --c: var(--gold);
+}
+
+.jewel.hollow {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+
+/* Satu-satunya ornamen: belah ketupat rose gold + garis rambut emas. */
+.ornament {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ornament::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  rotate: 45deg;
+  background: linear-gradient(135deg, var(--rose-hi), var(--rose-lo));
+}
+
+.ornament::after {
+  content: '';
+  width: 56px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+
+/* Jendela tanggal: sumur cekung untuk nilai kunci. */
+.aperture {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 12px;
+  background: var(--aperture);
+  box-shadow: var(--aperture-shadow);
+  font-variant-numeric: tabular-nums;
+}
+
+.aperture .label,
+.aperture .engr {
+  font-size: 11.5px;
+}
+
+.aperture b {
+  font-weight: 600;
 }
 
 /* ------------------------------------------------------------------ shell */
@@ -116,32 +332,42 @@ button {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 26px 18px 22px max(18px, env(safe-area-inset-left, 0px));
-  border-right: 1px solid var(--rule-soft);
-  background: linear-gradient(180deg, #101215 0%, var(--ink) 100%);
+  gap: 30px;
+  padding: 28px 18px 22px max(18px, env(safe-area-inset-left, 0px));
+  background:
+    var(--clous) 0 0 / 10px 10px,
+    linear-gradient(180deg, #0c111b, var(--night-0));
+  border-right: 1px solid var(--hair-gold);
+  box-shadow:
+    inset -3px 0 0 var(--night-0),
+    inset -4px 0 0 rgba(214, 178, 112, 0.06);
 }
 
 .mark {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   padding-left: 6px;
 }
 
 .mark b {
-  font-family: var(--f-display);
-  font-weight: 500;
-  font-size: 1.55rem;
-  letter-spacing: 0.22em;
-  color: var(--ivory);
+  font-family: var(--f-engr);
+  font-weight: 400;
+  font-size: 25px;
+  letter-spacing: 0.34em;
+  line-height: 1.1;
+  background: var(--polished-gold);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .mark span {
-  font-family: var(--f-mono);
-  font-size: var(--t-label);
+  font-family: var(--f-engr);
+  font-size: 12px;
   letter-spacing: 0.2em;
-  color: var(--brass-dim);
-  text-transform: uppercase;
+  text-transform: lowercase;
+  color: var(--gold-lo);
+  padding-left: 1px;
 }
 
 .nav {
@@ -150,56 +376,82 @@ button {
 }
 
 .nav a {
+  position: relative;
   display: grid;
-  grid-template-columns: 28px 1fr;
-  align-items: center;
-  gap: 4px;
-  padding: 9px 8px;
-  border-radius: var(--radius);
+  grid-template-columns: 26px 1fr;
+  align-items: baseline;
+  padding: 10px 10px 10px 14px;
   text-decoration: none;
   color: var(--ivory-2);
-  transition: background 160ms ease, color 160ms ease;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
 }
 
 .nav a .idx {
-  font-family: var(--f-mono);
-  font-size: var(--t-label);
+  font-family: var(--f-display);
+  font-style: italic;
+  font-size: 13px;
   color: var(--muted);
+}
+
+.nav a .ico {
+  display: none;
 }
 
 .nav a:hover {
   color: var(--ivory);
-  background: var(--plate);
+  background: rgba(214, 178, 112, 0.04);
 }
 
 .nav a[aria-current='page'] {
   color: var(--ivory);
-  background: var(--plate-2);
-  box-shadow: inset 0 0 0 1px var(--rule);
+  background: linear-gradient(90deg, rgba(214, 178, 112, 0.09), rgba(214, 178, 112, 0) 80%);
 }
 
 .nav a[aria-current='page'] .idx {
-  color: var(--brass);
+  color: var(--gold);
+}
+
+/* Baton rose gold seperti indeks terapan. */
+.nav a[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 18px;
+  translate: 0 -50%;
+  background: var(--polished-rose);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  animation: baton 220ms var(--ease-out);
+}
+
+@keyframes baton {
+  from {
+    height: 0;
+  }
 }
 
 .rail-foot {
   margin-top: auto;
   display: grid;
-  gap: 10px;
+  gap: 6px;
   padding: 14px 8px 0;
-  border-top: 1px solid var(--rule-soft);
+  border-top: 1px solid var(--hair-gold);
   color: var(--muted);
-  font-size: var(--t-small);
+  font-size: 12px;
 }
 
 .main {
   min-width: 0;
-  padding-block: 0 64px;
-  padding-left: max(16px, clamp(18px, 3vw, 44px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px), clamp(18px, 3vw, 44px));
+  overflow-x: clip;
+  padding-block: 0 72px;
+  padding-left: max(16px, clamp(18px, 3vw, 40px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px), clamp(18px, 3vw, 40px));
 }
 
-/* ------------------------------------------------------------------ topbar */
+/* ------------------------------------------------------------------ top bar (Côtes de Genève) */
 .topbar {
   position: sticky;
   top: env(safe-area-inset-top, 0px);
@@ -207,12 +459,14 @@ button {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 16px;
+  gap: 10px 14px;
   padding-block: 16px;
-  margin-bottom: 8px;
-  background: color-mix(in srgb, var(--ink) 92%, transparent);
-  backdrop-filter: blur(6px);
-  border-bottom: 1px solid var(--rule-soft);
+  margin-bottom: 18px;
+  background:
+    repeating-linear-gradient(102deg, rgba(255, 255, 255, 0) 0px, rgba(255, 255, 255, 0.03) 10px, rgba(255, 255, 255, 0) 19px, rgba(0, 0, 0, 0.12) 23px, rgba(255, 255, 255, 0) 26px),
+    color-mix(in srgb, var(--night-0) 90%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--hair-gold);
 }
 
 .topbar .spacer {
@@ -222,109 +476,148 @@ button {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 28px;
-  padding: 0 11px;
-  border: 1px solid var(--rule);
+  gap: 9px;
+  height: 30px;
+  padding: 0 13px;
+  border: 1px solid rgba(214, 178, 112, 0.22);
   border-radius: 999px;
-  font-family: var(--f-mono);
-  font-size: var(--t-label);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  box-shadow:
+    inset 0 0 0 2px #080b12,
+    inset 0 0 0 3px rgba(214, 178, 112, 0.06);
+  font-family: var(--f-engr);
+  font-size: 12.5px;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
   color: var(--ivory-2);
   white-space: nowrap;
 }
 
-.chip i {
-  width: 6px;
-  height: 6px;
+/* Titik status lama (<i/>) dirender sebagai cabochon. */
+.chip > i {
+  --c: var(--jewel-rhodium);
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--muted);
+  background: radial-gradient(circle at 34% 30%, #fff 0 9%, var(--c) 42%, color-mix(in srgb, var(--c) 45%, #000) 100%);
+  box-shadow:
+    0 0 0 1px rgba(214, 178, 112, 0.55),
+    0 0 0 2px rgba(0, 0, 0, 0.6);
 }
 
-.chip.ok i {
-  background: var(--up);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--up) 22%, transparent);
+.chip.ok > i {
+  --c: var(--jewel-emerald);
+}
+
+.chip.warn > i {
+  --c: var(--jewel-citrine);
+}
+
+.chip.bad > i {
+  --c: var(--jewel-ruby);
 }
 
 .chip.warn {
-  border-color: color-mix(in srgb, var(--warn) 45%, var(--rule));
   color: var(--warn-text);
 }
 
-.chip.warn i {
-  background: var(--warn);
-}
-
 .chip.bad {
-  border-color: color-mix(in srgb, var(--down) 45%, var(--rule));
+  border-color: color-mix(in srgb, var(--down) 50%, rgba(214, 178, 112, 0.22));
   color: var(--down-text);
 }
 
-.chip.bad i {
-  background: var(--down);
-}
-
 .btn {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--plate);
-  font-size: var(--t-small);
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid rgba(214, 178, 112, 0.26);
+  background: linear-gradient(180deg, var(--enamel-hi), #0d1320);
+  box-shadow: inset 0 1px 0 rgba(255, 236, 200, 0.06);
+  color: var(--ivory);
+  font: 500 13px var(--f-ui);
   cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease;
+  white-space: nowrap;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    background-position 600ms var(--ease-out);
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--brass-dim);
-  background: var(--plate-2);
+  border-color: rgba(214, 178, 112, 0.5);
+}
+
+.btn:active:not(:disabled) {
+  translate: 0 1px;
 }
 
 .btn:disabled {
-  opacity: 0.45;
+  opacity: 0.42;
   cursor: not-allowed;
 }
 
 .btn.primary {
-  border-color: var(--brass-dim);
-  color: #15120b;
-  background: linear-gradient(180deg, #dcc086, #b8954f);
+  border-color: #8a6a35;
+  color: #1a1408;
   font-weight: 600;
+  background: var(--polished-gold);
+  background-size: 100% 180%;
+  background-position: 0 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.btn.primary:hover:not(:disabled) {
+  background-position: 0 100%;
+  border-color: #8a6a35;
 }
 
 .btn.danger {
-  border-color: color-mix(in srgb, var(--down) 50%, var(--rule));
+  border-color: rgba(196, 86, 75, 0.55);
   color: var(--down-text);
+  background: linear-gradient(180deg, #171521, #100f18);
 }
 
-/* ------------------------------------------------------------------ page */
+.btn.danger:hover:not(:disabled) {
+  border-color: rgba(196, 86, 75, 0.8);
+  background: rgba(196, 86, 75, 0.12);
+}
+
+/* ------------------------------------------------------------------ halaman */
 .page-head {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px 24px;
-  padding-block: 22px 18px;
+  padding-block: 26px 20px;
 }
 
+.page-head .kicker {
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* Judul: Newsreader tegak, gading. Kata aksen tidak lagi miring-emas (trope "AI luxury"). */
 .page-head h1 {
   margin: 0;
   font-family: var(--f-display);
-  font-weight: 400;
+  font-weight: 340;
   font-size: var(--t-title);
-  line-height: 1.05;
-  letter-spacing: -0.01em;
+  font-variation-settings: 'opsz' 72;
+  line-height: 1.04;
+  letter-spacing: -0.012em;
   text-wrap: balance;
+  view-transition-name: page-title;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.6);
 }
 
 .page-head h1 em {
-  font-style: italic;
-  color: var(--brass);
+  font-style: normal;
+  color: inherit;
 }
 
 .page-head p {
-  margin: 6px 0 0;
+  margin: 10px 0 0;
   max-width: 64ch;
   color: var(--ivory-2);
 }
@@ -335,19 +628,33 @@ button {
   gap: var(--gap);
 }
 
-.span-12 { grid-column: span 12; }
-.span-8 { grid-column: span 8; }
-.span-7 { grid-column: span 7; }
-.span-6 { grid-column: span 6; }
-.span-5 { grid-column: span 5; }
-.span-4 { grid-column: span 4; }
+.span-12 {
+  grid-column: span 12;
+}
+.span-8 {
+  grid-column: span 8;
+}
+.span-7 {
+  grid-column: span 7;
+}
+.span-6 {
+  grid-column: span 6;
+}
+.span-5 {
+  grid-column: span 5;
+}
+.span-4 {
+  grid-column: span 4;
+}
 
+/* Pelat enamel grand-feu dalam bezel bertingkat (garis rambut ganda). */
 .panel {
+  position: relative;
   min-width: 0;
-  padding: 18px 20px 20px;
-  background: var(--plate);
-  border: 1px solid var(--rule-soft);
-  border-radius: var(--radius);
+  padding: 22px 24px 24px;
+  background: var(--enamel-plate);
+  border: 1px solid var(--hair-gold);
+  box-shadow: var(--bezel);
 }
 
 .panel-head {
@@ -356,71 +663,128 @@ button {
   align-items: baseline;
   justify-content: space-between;
   gap: 6px 16px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .panel-head h2 {
   margin: 0;
+  font-family: var(--f-display);
+  font-weight: 450;
   font-size: var(--t-h3);
-  font-weight: 500;
-  letter-spacing: 0.005em;
+  font-variation-settings: 'opsz' 36;
+  letter-spacing: -0.005em;
+  line-height: 1.2;
 }
 
 .panel-head .sub {
   color: var(--muted);
   font-size: var(--t-small);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Masuk saat terlihat (sekali); angka tidak pernah dianimasikan, hanya opasitas pelat. */
+.reveal {
+  opacity: 0;
+  translate: 0 14px;
+  transition:
+    opacity 600ms var(--ease-out),
+    translate 600ms var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 60ms);
+}
+
+.reveal.in {
+  opacity: 1;
+  translate: none;
 }
 
 /* ------------------------------------------------------------------ hero */
 .hero {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-  gap: var(--gap);
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   align-items: stretch;
   padding: 0;
   overflow: hidden;
+  min-height: 560px;
   background:
-    radial-gradient(120% 90% at 78% 40%, rgba(205, 174, 110, 0.09), transparent 60%),
-    linear-gradient(180deg, #14161a, var(--plate));
+    radial-gradient(42% 60% at 70% 48%, rgba(214, 178, 112, 0.1), transparent 70%),
+    var(--enamel-plate);
+}
+
+/* Flinqué: sinar guilloché berpusat di jam, seolah pola dial berlanjut ke pelat. */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-conic-gradient(from 0deg at 72% 50%, rgba(255, 255, 255, 0.024) 0deg 0.45deg, rgba(0, 0, 0, 0.06) 0.45deg 0.9deg);
+  -webkit-mask: radial-gradient(55% 85% at 72% 50%, transparent 0 16%, #000 38%, transparent 88%);
+  mask: radial-gradient(55% 85% at 72% 50%, transparent 0 16%, #000 38%, transparent 88%);
 }
 
 .hero-copy {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 28px 0 26px 28px;
+  padding: 32px 0 28px 32px;
   min-width: 0;
 }
 
 .hero-figure {
-  font-size: var(--t-hero);
+  margin: 0;
+  font-family: var(--f-display);
   font-weight: 300;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  margin: 2px 0 0;
+  font-size: var(--t-hero);
+  font-variation-settings: 'opsz' 72;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 0.95;
+  letter-spacing: -0.022em;
+  color: var(--ivory);
+  white-space: nowrap;
+}
+
+.hero-figure .cur {
+  font-size: 0.42em;
+  vertical-align: 0.6em;
+  color: var(--gold);
+  margin-right: 0.06em;
+  letter-spacing: 0;
 }
 
 .hero-figure .cents {
+  font-size: 0.42em;
   color: var(--muted);
-  font-size: 0.5em;
   letter-spacing: 0;
 }
 
 .deltas {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .delta {
   display: inline-flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  font-size: var(--t-small);
+  gap: 10px;
+  padding: 7px 12px;
+  background: var(--aperture);
+  box-shadow: var(--aperture-shadow);
+  font-variant-numeric: tabular-nums;
+  border-radius: 2px;
+}
+
+@supports (corner-shape: bevel) {
+  .delta {
+    border-radius: 4px;
+    corner-shape: bevel;
+  }
+}
+
+.delta .label {
+  font-size: 11.5px;
 }
 
 .delta b {
@@ -430,25 +794,28 @@ button {
 .stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
   margin-top: auto;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--hair-gold);
 }
 
 .stat {
   display: grid;
-  gap: 4px;
+  align-content: start;
+  gap: 2px;
   padding: 14px 12px 0 0;
 }
 
 .stat + .stat {
   padding-left: 14px;
-  border-left: 1px solid var(--rule-soft);
+  border-left: 1px solid var(--hair);
 }
 
 .stat .v {
-  font-size: 1.15rem;
-  font-weight: 500;
+  font-family: var(--f-display);
+  font-weight: 420;
+  font-size: 1.6rem;
+  line-height: 1.1;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .stat .s {
@@ -458,28 +825,27 @@ button {
 
 .instrument {
   position: relative;
-  min-height: 420px;
   display: grid;
+  grid-template-rows: minmax(460px, 1fr) auto;
+  min-height: 460px;
 }
-
 
 .instrument canvas {
   touch-action: pan-y;
 }
 
 .canvas-slot {
-  min-height: 380px;
-}
-
-.instrument {
-  grid-template-rows: minmax(380px, 1fr) auto;
+  min-height: 460px;
+  -webkit-mask: radial-gradient(70% 78% at 52% 50%, #000 60%, transparent 100%);
+  mask: radial-gradient(70% 78% at 52% 50%, #000 60%, transparent 100%);
 }
 
 .legend-strip {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: 8px 22px;
-  padding: 0 24px 20px;
+  padding: 0 28px 22px;
   font-size: var(--t-small);
   color: var(--ivory-2);
 }
@@ -493,6 +859,7 @@ button {
 .legend-strip b {
   font-weight: 500;
   color: var(--ivory);
+  font-variant-numeric: tabular-nums;
 }
 
 .holding {
@@ -513,7 +880,7 @@ button {
   grid-template-columns: 14px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: baseline;
-  font-size: var(--t-small);
+  font-size: 13px;
   color: var(--ivory-2);
 }
 
@@ -536,12 +903,17 @@ button {
   border-top: 0;
 }
 
+/* Kunci legenda: baton emas (strategi / seri 1), baja biru (trader / seri 2). */
 .key {
   display: inline-block;
   width: 12px;
   height: 2px;
-  background: var(--brass);
+  background: linear-gradient(90deg, #8a6a35, #f3dfae 50%, #8a6a35);
   transform: translateY(-3px);
+}
+
+.key.steel {
+  background: linear-gradient(90deg, #2b4f9e, #7fa6e6 50%, #2b4f9e);
 }
 
 .key.ivory {
@@ -552,7 +924,7 @@ button {
   background: var(--down);
 }
 
-/* ------------------------------------------------------------------ charts */
+/* ------------------------------------------------------------------ grafik */
 .chart {
   position: relative;
   width: 100%;
@@ -566,18 +938,21 @@ button {
 
 .chart .axis text {
   fill: var(--muted);
-  font-family: var(--f-mono);
+  font-family: var(--f-ui);
+  font-stretch: 75%;
+  font-variant-numeric: tabular-nums;
   font-size: 10.5px;
 }
 
 .chart .grid-line {
-  stroke: var(--rule-soft);
+  stroke: rgba(239, 231, 214, 0.05);
   stroke-width: 1;
 }
 
 .chart .zero-line {
-  stroke: var(--rule);
+  stroke: rgba(239, 231, 214, 0.3);
   stroke-width: 1;
+  stroke-dasharray: 1 3;
 }
 
 .tooltip {
@@ -586,18 +961,18 @@ button {
   pointer-events: none;
   min-width: 150px;
   padding: 9px 11px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: rgba(16, 18, 21, 0.96);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(214, 178, 112, 0.22);
+  background: rgba(6, 9, 17, 0.96);
+  box-shadow:
+    inset 0 0 0 3px var(--night-1),
+    0 12px 30px rgba(0, 0, 0, 0.5);
   font-size: var(--t-small);
 }
 
 .tooltip .t {
   color: var(--muted);
-  font-family: var(--f-mono);
-  font-size: var(--t-label);
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   margin-bottom: 4px;
 }
 
@@ -633,57 +1008,68 @@ button {
 
 .seg {
   display: inline-flex;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  padding: 2px;
+  background: var(--aperture);
+  box-shadow: var(--aperture-shadow);
   overflow: hidden;
 }
 
 .seg button {
   height: 26px;
-  padding: 0 10px;
+  padding: 0 11px;
   border: 0;
+  border-radius: 4px;
   background: transparent;
-  font-family: var(--f-mono);
-  font-size: var(--t-label);
-  letter-spacing: 0.08em;
+  font-family: var(--f-engr);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
   color: var(--muted);
   cursor: pointer;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
 }
 
 .seg button[aria-pressed='true'] {
-  background: var(--plate-2);
+  background: var(--enamel-hi);
   color: var(--ivory);
 }
 
-/* ------------------------------------------------------------------ tables */
+/* ------------------------------------------------------------------ tabel */
 .table-wrap {
   overflow-x: auto;
-  margin: 0 -20px;
-  padding: 0 20px;
+  margin: 0 -24px;
+  padding: 0 24px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-deep) transparent;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--t-small);
+  font-size: 13px;
+  font-stretch: 87.5%;
+  font-variant-numeric: tabular-nums;
 }
 
 th {
   text-align: left;
-  font-family: var(--f-mono);
-  font-size: var(--t-label);
-  font-weight: 500;
-  letter-spacing: 0.1em;
+  font-family: var(--f-ui);
+  font-size: 10.5px;
+  font-stretch: 75%;
+  font-weight: 560;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
   color: var(--muted);
   padding: 0 10px 10px;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid rgba(214, 178, 112, 0.22);
   white-space: nowrap;
 }
 
 td {
-  padding: 11px 10px;
-  border-bottom: 1px solid var(--rule-soft);
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--hair);
   vertical-align: middle;
   white-space: nowrap;
 }
@@ -691,6 +1077,8 @@ td {
 td.wrap {
   white-space: normal;
   min-width: 220px;
+  max-width: 34ch;
+  color: var(--ivory-2);
 }
 
 th:first-child,
@@ -713,9 +1101,16 @@ tbody tr {
   transition: background 120ms ease;
 }
 
-tbody tr:hover,
+tbody tr:hover {
+  background: rgba(214, 178, 112, 0.045);
+}
+
+tbody tr:hover > td:first-child {
+  box-shadow: inset 2px 0 0 var(--gold);
+}
+
 tbody tr.hot {
-  background: rgba(205, 174, 110, 0.04);
+  background: linear-gradient(90deg, rgba(214, 178, 112, 0.08), rgba(214, 178, 112, 0) 70%);
 }
 
 .coin {
@@ -723,61 +1118,79 @@ tbody tr.hot {
   align-items: center;
   gap: 10px;
   font-weight: 500;
+  font-stretch: 100%;
 }
 
+/* Chaton: setting emas bubut dengan kilau anisotropik. */
 .coin-badge {
   display: inline-grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  flex: none;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  border: 1px solid var(--rule);
-  background: radial-gradient(circle at 35% 30%, #2a2c30, #131417);
-  font-family: var(--f-mono);
-  font-size: 9.5px;
+  font: 600 8.5px var(--f-ui);
+  font-stretch: 75%;
   letter-spacing: 0.02em;
-  color: var(--brass);
+  color: var(--gold);
+  background:
+    radial-gradient(circle, #0c1220 0 56%, transparent 58%),
+    conic-gradient(from 210deg, #6e5228, #f3dfae, #b8924f, #6e5228, #e9d3a0, #8a6a35, #6e5228);
 }
 
 .side {
   display: inline-block;
-  min-width: 52px;
+  min-width: 54px;
   padding: 2px 8px;
   border-radius: 999px;
   text-align: center;
-  font-family: var(--f-mono);
-  font-size: var(--t-label);
-  letter-spacing: 0.1em;
+  font-family: var(--f-ui);
+  font-size: 10.5px;
+  font-stretch: 75%;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .side.long {
   color: var(--up-text);
-  background: color-mix(in srgb, var(--up) 12%, transparent);
+  background: rgba(58, 158, 122, 0.13);
 }
 
 .side.short {
   color: var(--down-text);
-  background: color-mix(in srgb, var(--down) 12%, transparent);
+  background: rgba(196, 86, 75, 0.13);
 }
 
+/* Status trader: bentuk berbeda, bukan hanya warna (emas = disalin, rhodium = kandidat, cincin = ditolak). */
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: var(--t-small);
+  gap: 8px;
+  font-family: var(--f-engr);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
 }
 
 .status-pill::before {
   content: '';
-  width: 7px;
-  height: 7px;
+  --c: var(--jewel-rhodium);
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: currentColor;
+  background: radial-gradient(circle at 34% 30%, #fff 0 9%, var(--c) 42%, color-mix(in srgb, var(--c) 45%, #000) 100%);
+  box-shadow:
+    0 0 0 1px rgba(214, 178, 112, 0.55),
+    0 0 0 2px rgba(0, 0, 0, 0.6);
 }
 
 .status-pill.copying {
-  color: var(--brass);
+  color: var(--gold);
+}
+
+.status-pill.copying::before {
+  --c: var(--gold);
 }
 
 .status-pill.candidate {
@@ -788,6 +1201,11 @@ tbody tr.hot {
   color: var(--muted);
 }
 
+.status-pill.rejected::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+
 .weight {
   display: inline-flex;
   align-items: center;
@@ -795,18 +1213,20 @@ tbody tr.hot {
 }
 
 .weight .bar {
+  position: relative;
   width: 64px;
-  height: 4px;
-  background: var(--rule-soft);
-  border-radius: 2px;
+  height: 3px;
+  background:
+    linear-gradient(90deg, transparent calc(25% - 0.5px), rgba(239, 231, 214, 0.18) 0 calc(25% + 0.5px), transparent 0 calc(50% - 0.5px), rgba(239, 231, 214, 0.18) 0 calc(50% + 0.5px), transparent 0 calc(75% - 0.5px), rgba(239, 231, 214, 0.18) 0 calc(75% + 0.5px), transparent 0),
+    var(--aperture);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.8);
   overflow: hidden;
 }
 
 .weight .bar i {
   display: block;
   height: 100%;
-  background: var(--series-1);
-  border-radius: 2px;
+  background: linear-gradient(180deg, #e9d3a0, #b8924f 60%, #8a6a35);
 }
 
 .empty {
@@ -830,7 +1250,7 @@ tbody tr.hot {
 .alloc-bar i {
   display: block;
   height: 100%;
-  border-radius: 2px;
+  border-radius: 1px;
 }
 
 .alloc-legend {
@@ -854,7 +1274,7 @@ tbody tr.hot {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px 12px;
   padding: 11px 0;
-  border-top: 1px solid var(--rule-soft);
+  border-top: 1px solid var(--hair);
 }
 
 .pick-list .what {
@@ -876,14 +1296,17 @@ tbody tr.hot {
 .meter-track {
   position: relative;
   height: 6px;
-  border-radius: 3px;
-  background: var(--rule-soft);
+  background:
+    repeating-linear-gradient(90deg, rgba(239, 231, 214, 0.08) 0 1px, transparent 1px 5%),
+    var(--aperture);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8);
+  border-radius: 1px;
 }
 
 .meter-track i {
   position: absolute;
   inset: 0 auto 0 0;
-  border-radius: 3px;
+  border-radius: 1px;
 }
 
 .meter-head {
@@ -895,6 +1318,7 @@ tbody tr.hot {
 
 .meter-head span:last-child {
   color: var(--ivory-2);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------------------------ feed */
@@ -910,8 +1334,8 @@ tbody tr.hot {
   grid-template-columns: 88px minmax(0, 1fr);
   gap: 12px;
   padding: 9px 0;
-  border-top: 1px solid var(--rule-soft);
-  font-size: var(--t-small);
+  border-top: 1px solid var(--hair);
+  font-size: 13px;
 }
 
 .feed li:first-child {
@@ -920,8 +1344,8 @@ tbody tr.hot {
 
 .feed time {
   color: var(--muted);
-  font-family: var(--f-mono);
-  font-size: var(--t-label);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   padding-top: 2px;
 }
 
@@ -942,21 +1366,22 @@ tbody tr.hot {
 /* ------------------------------------------------------------------ lab */
 .ridges {
   position: relative;
-  height: 460px;
+  height: 480px;
   padding: 0;
   overflow: hidden;
   background:
-    radial-gradient(90% 80% at 50% 30%, rgba(205, 174, 110, 0.06), transparent 70%),
-    linear-gradient(180deg, #14161a, var(--plate));
+    radial-gradient(90% 80% at 50% 30%, rgba(214, 178, 112, 0.06), transparent 70%),
+    var(--enamel-plate);
 }
 
 .ridges .overlay {
   position: absolute;
-  left: 20px;
-  top: 18px;
+  left: 24px;
+  top: 20px;
+  z-index: 1;
   display: grid;
   gap: 4px;
-  max-width: 340px;
+  max-width: 360px;
   pointer-events: none;
 }
 
@@ -964,7 +1389,7 @@ tbody tr.hot {
   margin: 0;
   font-family: var(--f-display);
   font-weight: 400;
-  font-size: 1.5rem;
+  font-size: 1.6rem;
 }
 
 .ridges .overlay p {
@@ -978,11 +1403,12 @@ tbody tr.hot {
   gap: 2px;
   transform: translate(10px, -50%);
   padding: 7px 10px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: rgba(16, 18, 21, 0.95);
+  border: 1px solid rgba(214, 178, 112, 0.22);
+  border-radius: 4px;
+  background: rgba(6, 9, 17, 0.96);
   white-space: nowrap;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .ridge-tip strong {
@@ -994,9 +1420,11 @@ tbody tr.hot {
 }
 
 .ridge-axis {
-  font-family: var(--f-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-family: var(--f-ui);
+  font-stretch: 75%;
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -1012,52 +1440,57 @@ tbody tr.hot {
   align-content: start;
   gap: 8px;
   padding: 16px 0 0;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid rgba(214, 178, 112, 0.22);
 }
 
 .catalog h3 {
   margin: 0;
-  font-weight: 500;
-  font-size: 0.95rem;
+  font-family: var(--f-display);
+  font-weight: 450;
+  font-size: 1.15rem;
 }
 
 .catalog p {
   margin: 0;
   color: var(--ivory-2);
-  font-size: var(--t-small);
+  font-size: 13px;
 }
 
 .figures {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--hair-gold);
   margin-top: 16px;
 }
 
-.figures div {
+.figures > div {
   display: grid;
+  align-content: start;
   gap: 2px;
   padding: 12px 12px 0 0;
+  min-width: 0;
 }
 
-.figures div + div {
+.figures > div + div {
   padding-left: 14px;
-  border-left: 1px solid var(--rule-soft);
+  border-left: 1px solid var(--hair);
 }
 
 .figures b {
-  font-size: 1.05rem;
-  font-weight: 500;
+  font-family: var(--f-display);
+  font-weight: 420;
+  font-size: 1.3rem;
+  line-height: 1.15;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .note {
   margin: 14px 0 0;
-  padding: 10px 12px;
-  border-left: 2px solid var(--brass-dim);
-  background: rgba(205, 174, 110, 0.04);
+  padding: 10px 14px;
+  border-left: 2px solid rgba(214, 178, 112, 0.5);
+  background: rgba(214, 178, 112, 0.035);
   color: var(--ivory-2);
-  font-size: var(--t-small);
+  font-size: 13px;
   max-width: 78ch;
 }
 
@@ -1068,41 +1501,47 @@ tbody tr.hot {
 /* ------------------------------------------------------------------ funnel */
 .funnel {
   display: grid;
-  gap: 8px;
+  gap: 9px;
 }
 
 .funnel-row {
   display: grid;
-  grid-template-columns: minmax(110px, 160px) minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(104px, 160px) minmax(0, 1fr) 40px;
   gap: 12px;
   align-items: center;
-  font-size: var(--t-small);
+  font-size: 13px;
 }
 
 .funnel-label {
   color: var(--ivory-2);
 }
 
+/* Trek dengan skala 10% seperti indikator cadangan daya; isian solid emas poles. */
 .funnel-track {
-  height: 10px;
-  background: var(--rule-soft);
-  border-radius: 2px;
+  height: 8px;
+  background:
+    repeating-linear-gradient(90deg, rgba(239, 231, 214, 0.1) 0 1px, transparent 1px 10%),
+    rgba(239, 231, 214, 0.04);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  border-radius: 1px;
   overflow: hidden;
 }
 
 .funnel-track i {
   display: block;
   height: 100%;
-  background: var(--series-1);
-  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, #e9d3a0, #b8924f 60%, #8a6a35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  border-radius: 1px;
 }
 
 .funnel-n {
   text-align: right;
   color: var(--ivory);
+  font-variant-numeric: tabular-nums;
 }
 
-/* ------------------------------------------------------------------ risk */
+/* ------------------------------------------------------------------ risiko */
 .profiles {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1110,36 +1549,77 @@ tbody tr.hot {
 }
 
 .profile {
+  position: relative;
+  overflow: hidden;
   display: grid;
   align-content: start;
   gap: 12px;
-  padding: 18px;
+  padding: 22px 24px 24px;
   text-align: left;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--plate);
+  border: 1px solid var(--hair-gold);
+  background: var(--enamel-plate);
+  box-shadow: var(--bezel);
   cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease;
+  transition: border-color 140ms ease;
 }
 
 .profile:hover:not(:disabled) {
-  border-color: var(--brass-dim);
+  border-color: rgba(214, 178, 112, 0.4);
 }
 
 .profile[aria-pressed='true'] {
-  border-color: var(--brass);
-  background: linear-gradient(180deg, rgba(205, 174, 110, 0.08), var(--plate) 60%);
+  border-color: rgba(214, 178, 112, 0.55);
+}
+
+/* Perlage: bintik graining tumpang tindih di pita atas profil aktif. */
+.profile[aria-pressed='true']::before,
+.profile[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 92px;
+  pointer-events: none;
+  background: conic-gradient(from 30deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.14) 25%, rgba(255, 255, 255, 0.08) 50%, rgba(0, 0, 0, 0.14) 75%, rgba(255, 255, 255, 0.08)) 0 0 / 14px 14px;
+  -webkit-mask:
+    radial-gradient(circle at 50% 50%, #000 6.3px, transparent 6.9px) 0 0 / 14px 14px,
+    linear-gradient(#000, transparent);
+  -webkit-mask-composite: source-in;
+  mask:
+    radial-gradient(circle at 50% 50%, #000 6.3px, transparent 6.9px) 0 0 / 14px 14px,
+    linear-gradient(#000, transparent);
+  mask-composite: intersect;
+}
+
+.profile[aria-pressed='true']::after {
+  background-position: 7px 7px;
+  -webkit-mask-position:
+    7px 7px,
+    0 0;
+  mask-position:
+    7px 7px,
+    0 0;
 }
 
 .profile:disabled {
   cursor: default;
 }
 
+.profile > * {
+  position: relative;
+}
+
 .profile h3 {
   margin: 0;
   font-family: var(--f-display);
-  font-weight: 400;
-  font-size: 1.6rem;
+  font-weight: 380;
+  font-size: 1.9rem;
+  line-height: 1.1;
+}
+
+.profile .ref {
+  font-family: var(--f-display);
+  font-style: italic;
+  color: var(--gold-lo);
 }
 
 .profile dl {
@@ -1147,7 +1627,7 @@ tbody tr.hot {
   grid-template-columns: 1fr auto;
   gap: 6px 12px;
   margin: 0;
-  font-size: var(--t-small);
+  font-size: 13px;
 }
 
 .profile dt {
@@ -1166,7 +1646,71 @@ tbody tr.hot {
   gap: 10px;
 }
 
-/* ------------------------------------------------------------------ dialogs */
+/* Buku besar: garis titik penuntun dari label ke nilai, total dengan garis akuntansi ganda. */
+.ledger {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.ledger > div {
+  display: grid;
+  grid-template-columns: auto minmax(24px, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 0;
+}
+
+.ledger > div::after {
+  content: '';
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  margin-bottom: 5px;
+  border-bottom: 1px dotted rgba(214, 178, 112, 0.32);
+}
+
+.ledger dt {
+  grid-column: 1;
+  color: var(--ivory-2);
+}
+
+.ledger dd {
+  grid-column: 3;
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger > div.total {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 3px double rgba(214, 178, 112, 0.45);
+}
+
+.ledger > div.total::after {
+  display: none;
+}
+
+.ledger > div.total dt {
+  color: var(--ivory);
+  font-family: var(--f-display);
+  font-size: 1.05rem;
+}
+
+.ledger > div.total dd {
+  font-family: var(--f-display);
+  font-weight: 420;
+  font-size: 1.6rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  grid-column: 2 / 4;
+}
+
+.ledger.compact > div {
+  padding: 7px 0;
+}
+
+/* ------------------------------------------------------------------ dialog */
 .scrim {
   position: fixed;
   inset: 0;
@@ -1174,24 +1718,27 @@ tbody tr.hot {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(5, 6, 7, 0.7);
+  background: rgba(3, 5, 9, 0.72);
+  backdrop-filter: blur(6px) saturate(0.8);
+  animation: fade 200ms ease;
 }
 
 .dialog {
   width: min(440px, 100%);
   display: grid;
   gap: 14px;
-  padding: 22px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--plate);
+  padding: 24px;
+  border: 1px solid var(--hair-gold);
+  background: var(--enamel-plate);
+  box-shadow: var(--bezel);
+  animation: rise 240ms var(--ease-out);
 }
 
 .dialog h2 {
   margin: 0;
   font-family: var(--f-display);
   font-weight: 400;
-  font-size: 1.5rem;
+  font-size: 1.6rem;
 }
 
 .dialog p {
@@ -1199,14 +1746,24 @@ tbody tr.hot {
   color: var(--ivory-2);
 }
 
-.dialog input {
-  height: 36px;
-  padding: 0 10px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--ink);
+.dialog input,
+select {
+  height: 38px;
+  padding: 0 12px;
+  border: 0;
+  background: var(--aperture);
+  box-shadow: var(--aperture-shadow);
   color: var(--ivory);
   font-family: var(--f-mono);
+}
+
+select {
+  font-family: var(--f-ui);
+  padding-right: 30px;
+  appearance: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a9874b' stroke-width='1.3'/%3E%3C/svg%3E") right 12px center no-repeat,
+    var(--aperture);
 }
 
 .dialog .row {
@@ -1221,11 +1778,13 @@ tbody tr.hot {
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   z-index: 60;
   max-width: min(420px, calc(100vw - 32px));
-  padding: 11px 14px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--plate-2);
-  font-size: var(--t-small);
+  padding: 12px 16px;
+  border: 1px solid var(--hair-gold);
+  border-left: 2px solid var(--gold);
+  background: var(--enamel-hi);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  font-size: 13px;
+  animation: rise 240ms var(--ease-out);
 }
 
 .demo-banner {
@@ -1234,23 +1793,48 @@ tbody tr.hot {
   gap: 4px 12px;
   align-items: baseline;
   padding: 10px 14px;
-  margin-top: 16px;
-  border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--rule));
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--warn) 6%, var(--plate));
-  font-size: var(--t-small);
+  margin-bottom: 4px;
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, rgba(214, 178, 112, 0.2));
+  border-left: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 6%, var(--enamel));
+  font-size: 13px;
   color: var(--ivory-2);
 }
 
 .demo-banner b {
   color: var(--warn-text);
-  font-family: var(--f-mono);
-  font-size: var(--t-label);
-  letter-spacing: 0.14em;
-  font-weight: 600;
+  font-family: var(--f-engr);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: lowercase;
 }
 
-/* ------------------------------------------------------------------ responsive */
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+}
+
+/* Perpindahan halaman: crossfade 220ms; judul serif bermorf. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+}
+
+::view-transition-group(page-title) {
+  animation-duration: 320ms;
+  animation-timing-function: var(--ease-out);
+}
+
+/* ------------------------------------------------------------------ responsif */
 @media (max-width: 1180px) {
   .span-8,
   .span-7,
@@ -1262,14 +1846,20 @@ tbody tr.hot {
 
   .hero {
     grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
   }
 
   .hero-copy {
-    padding: 24px 22px 0;
+    padding: 26px 24px 0;
   }
 
   .instrument {
-    min-height: 380px;
+    grid-template-rows: 400px auto;
+    min-height: 0;
+  }
+
+  .canvas-slot {
+    min-height: 400px;
   }
 }
 
@@ -1289,10 +1879,13 @@ tbody tr.hot {
     height: auto;
     z-index: 20;
     flex-direction: row;
-    padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+    padding: 6px max(6px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(6px, env(safe-area-inset-left, 0px));
     border-right: 0;
-    border-top: 1px solid var(--rule);
-    background: rgba(12, 13, 15, 0.97);
+    border-top: 1px solid rgba(214, 178, 112, 0.22);
+    box-shadow: none;
+    background:
+      var(--clous) 0 0 / 10px 10px,
+      rgba(7, 9, 14, 0.97);
   }
 
   .rail .mark,
@@ -1303,15 +1896,47 @@ tbody tr.hot {
   .nav {
     width: 100%;
     grid-auto-flow: column;
-    grid-auto-columns: 1fr;
+    grid-auto-columns: minmax(0, 1fr);
   }
 
   .nav a {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     justify-items: center;
+    gap: 2px;
     text-align: center;
-    padding: 6px 2px;
-    font-size: 0.7rem;
+    padding: 6px 1px 4px;
+    font-size: 10px;
+    font-stretch: 75%;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .nav a .idx {
+    display: none;
+  }
+
+  .nav a .ico {
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+  }
+
+  .nav a[aria-current='page'] .ico {
+    color: var(--gold);
+  }
+
+  .nav a[aria-current='page'] {
+    background: none;
+  }
+
+  .nav a[aria-current='page']::before {
+    left: 50%;
+    top: 0;
+    width: 18px;
+    height: 2px;
+    translate: -50% 0;
+    background: linear-gradient(90deg, var(--rose-lo), var(--rose-hi), var(--rose-lo));
+    animation: none;
   }
 
   .main {
@@ -1320,13 +1945,44 @@ tbody tr.hot {
     padding-bottom: 96px;
   }
 
+  .panel,
+  .profile {
+    padding: 18px 16px 20px;
+  }
+
+  .table-wrap {
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+
+  td:first-child,
+  th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--enamel);
+  }
+
+  .table-wrap.is-overflowing {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  }
+
+  .hero-copy {
+    padding: 22px 18px 0;
+  }
+
+  .hero-figure {
+    font-size: clamp(2.6rem, 13vw, 3.4rem);
+  }
+
   .stats,
   .figures {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .stat:nth-child(3),
-  .figures div:nth-child(3) {
+  .figures > div:nth-child(3) {
     padding-left: 0;
     border-left: 0;
   }
@@ -1336,12 +1992,11 @@ tbody tr.hot {
   }
 
   .instrument {
-    min-height: 0;
-    grid-template-rows: 320px auto;
+    grid-template-rows: 300px auto;
   }
 
   .canvas-slot {
-    min-height: 320px;
+    min-height: 300px;
   }
 
   .legend-strip {
@@ -1353,11 +2008,15 @@ tbody tr.hot {
   }
 
   .feed.two-col li:nth-child(2) {
-    border-top: 1px solid var(--rule-soft);
+    border-top: 1px solid var(--hair);
   }
 
   .ridges {
-    height: 380px;
+    height: 360px;
+  }
+
+  .funnel-track {
+    background: rgba(239, 231, 214, 0.05);
   }
 
   .topbar .hide-sm {
@@ -1365,8 +2024,38 @@ tbody tr.hot {
   }
 }
 
+@media (max-width: 500px) {
+  .topbar {
+    backdrop-filter: none;
+    background: rgba(7, 9, 14, 0.97);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .reveal {
+    opacity: 1;
+    translate: none;
+  }
+}
+
+/* Label navigasi: lengkap di rel, singkat di dock ponsel. */
+.nav-label .short {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .nav-label .full {
+    display: none;
+  }
+
+  .nav-label .short {
+    display: inline;
   }
 }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Confirm } from './components/bits';
 import { IconDial, IconLedger, IconPeople, IconRidges, IconSeal, IconShield } from './components/icons';
-import { countdown, dateTime, timeOnly } from './data/format';
+import { countdown, dateTime, timeOnly, weekday } from './data/format';
 import { useSnapshot } from './data/useSnapshot';
 import { Journal } from './views/Journal';
 import { Lab } from './views/Lab';
@@ -11,12 +12,12 @@ import { Risk } from './views/Risk';
 import { Statement } from './views/Statement';
 
 const VIEWS = [
-  { id: 'ringkasan', label: 'Ringkasan', icon: IconDial },
-  { id: 'lab', label: 'Lab Strategi', icon: IconRidges },
-  { id: 'trader', label: 'Trader', icon: IconPeople },
-  { id: 'jurnal', label: 'Jurnal', icon: IconLedger },
-  { id: 'laporan', label: 'Laporan', icon: IconSeal },
-  { id: 'risiko', label: 'Risiko', icon: IconShield },
+  { id: 'ringkasan', label: 'Ringkasan', short: 'Ringkasan', roman: 'I', icon: IconDial },
+  { id: 'lab', label: 'Lab Strategi', short: 'Lab', roman: 'II', icon: IconRidges },
+  { id: 'trader', label: 'Trader', short: 'Trader', roman: 'III', icon: IconPeople },
+  { id: 'jurnal', label: 'Jurnal', short: 'Jurnal', roman: 'IV', icon: IconLedger },
+  { id: 'laporan', label: 'Laporan', short: 'Laporan', roman: 'V', icon: IconSeal },
+  { id: 'risiko', label: 'Risiko', short: 'Risiko', roman: 'VI', icon: IconShield },
 ] as const;
 
 type ViewId = (typeof VIEWS)[number]['id'];
@@ -36,7 +37,13 @@ export default function App() {
   const [tokenInput, setTokenInput] = useState('');
 
   useEffect(() => {
-    const on = () => setView(fromHash());
+    const on = () => {
+      const next = fromHash();
+      // Crossfade antar halaman bila browser mendukung View Transitions (dilewati saat reduced-motion).
+      const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+      if (doc.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) doc.startViewTransition(() => flushSync(() => setView(next)));
+      else setView(next);
+    };
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
@@ -95,17 +102,25 @@ export default function App() {
         <nav className="nav" aria-label="Halaman">
           {VIEWS.map((v) => (
             <a key={v.id} href={`#${v.id}`} aria-current={view === v.id ? 'page' : undefined} onClick={() => window.scrollTo({ top: 0 })}>
-              <span className="idx">
+              <span className="idx" aria-hidden="true">
+                {v.roman}
+              </span>
+              <span className="ico" aria-hidden="true">
                 <v.icon />
               </span>
-              <span>{v.label}</span>
+              <span className="nav-label">
+                <span className="full">{v.label}</span>
+                <span className="short">{v.short}</span>
+              </span>
             </a>
           ))}
         </nav>
         <div className="rail-foot">
           <span className="label">Pembaruan</span>
-          <span className="num">{dateTime(snap.generatedAt)} WIB</span>
-          <span>{snap.synthetic ? 'Sumber: simulasi demo' : `Tick ${snap.status.tickMs} ms`}</span>
+          <span>
+            <span className="num">{dateTime(snap.generatedAt)}</span> WIB
+          </span>
+          <span>{snap.synthetic ? 'Sumber: simulasi demo' : <>Tick <span className="num">{snap.status.tickMs}</span> ms</>}</span>
         </div>
       </aside>
 
@@ -127,7 +142,7 @@ export default function App() {
           </span>
           <span className="spacer" />
           <span className="label hide-sm">
-            Rebalance Senin {timeOnly(snap.status.nextRebalance)} WIB · {countdown(snap.status.nextRebalance - now)}
+            Siklus berikut {weekday(snap.status.nextRebalance).toLowerCase()} <span className="num">{timeOnly(snap.status.nextRebalance)}</span> wib · <span className="num">{countdown(snap.status.nextRebalance - now)}</span>
           </span>
           {st === 'running' ? (
             <button className="btn" disabled={!live} onClick={() => act('pause')} title={live ? undefined : 'Butuh engine yang berjalan'}>
