@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Confirm } from './components/bits';
+import { useDecor } from './components/decor';
 import { IconDial, IconLedger, IconPeople, IconRidges, IconSeal, IconShield } from './components/icons';
 import { countdown, dateTime, timeOnly, weekday } from './data/format';
 import { useSnapshot } from './data/useSnapshot';
@@ -87,6 +88,8 @@ export default function App() {
     },
     [run],
   );
+
+  useDecor(view);
 
   const live = conn.kind === 'live';
   const now = live ? Date.now() : snap.generatedAt;
