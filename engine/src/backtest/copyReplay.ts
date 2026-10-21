@@ -178,6 +178,8 @@ export function replayCopy(inp: ReplayInputs, o: ReplayOptions): ReplayResult {
   let periodStart = start;
   let periodBase = o.startEquity;
   let haltedUntil = 0;
+  // Setelah kill switch, engine live menyalin ulang semua posisi leader di awal siklus berikutnya.
+  let resumePending = false;
   // Masuk posisi leader yang sudah terbuka di awal jendela.
   for (const c of coins) {
     lastPx[c] = priceAtOpen(c, start);
@@ -186,6 +188,10 @@ export function replayCopy(inp: ReplayInputs, o: ReplayOptions): ReplayResult {
   equity.push({ t: start, equity: ourEquity() });
   for (let h = start; h < inp.to; h += HOUR) {
     const barEnd = h + HOUR;
+    if (resumePending && h >= haltedUntil) {
+      resumePending = false;
+      for (const c of coins) if (leaderPos[c]) sync(h, c, lastPx[c], 'siklus baru setelah kill switch');
+    }
     while (fi < fills.length && fills[fi].time < barEnd) {
       const f = fills[fi++];
       if (!coins.includes(f.coin)) continue;
@@ -219,6 +225,7 @@ export function replayCopy(inp: ReplayInputs, o: ReplayOptions): ReplayResult {
       flattenAll(barEnd, 'kill switch');
       killHits++;
       haltedUntil = periodStart + 7 * 24 * HOUR;
+      resumePending = true;
     }
     equity.push({ t: barEnd, equity: ourEquity() });
   }

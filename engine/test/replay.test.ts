@@ -74,6 +74,25 @@ describe('replay copy trading', () => {
     expect(tail[0]).toBeCloseTo(tail[1], 8);
   });
 
+  it('setelah kill switch, posisi leader yang masih terbuka disalin lagi di awal siklus berikutnya', () => {
+    const prices = Array.from({ length: 180 }, (_, i) => (i < 2 ? 100 : i < 4 ? 85 : 80));
+    const inp: ReplayInputs = {
+      leader: '0xabc',
+      from: T0,
+      to: T0 + 175 * H,
+      fills: [fill(T0 + 1 * H, 'B', 0, 30, 100)],
+      leaderEquity: [[T0, 1000]],
+      openAtEnd: {},
+      candles: { BTC: candles(prices) },
+      funding: {},
+    };
+    const r = replayCopy(inp, opts);
+    expect(r.stats.killSwitchHits).toBe(1);
+    const resume = r.trades.find((t) => t.reason === 'siklus baru setelah kill switch');
+    expect(resume?.t).toBe(T0 + 168 * H);
+    expect(resume?.side).toBe('buy');
+  });
+
   it('funding long dibayar per jam', () => {
     const inp: ReplayInputs = {
       leader: '0xabc',
