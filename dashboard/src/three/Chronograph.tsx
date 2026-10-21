@@ -9,12 +9,24 @@ import { DIAL_DAYS, makeDialTexture, SUB, SWEEP } from './dialTexture';
 // Kronograf mingguan: jarum utama = progres minggu (rebalance tiap Senin 00:00 UTC),
 // subdial kiri = PnL minggu terhadap batas kill switch, kanan = leverage, bawah = detik.
 
+export type ChronoPart = 'main' | 'left' | 'right';
+
 export interface ChronoProps {
-  weekProgress: number; // 0..1
+  weekProgress: number; // 0..1 dalam siklus 7 hari berjalan
   pnlRatio: number; // PnL minggu / batas rugi, -1 = kill switch
   levRatio: number; // leverage / batas gross
   lossLimit: number;
   maxLeverage: number;
+  // Kontrak redesign (Grand-Feu Minuit). Opsional supaya komponen lama tetap jalan.
+  cycleStart?: number; // ms awal siklus; nama hari di dial dimulai dari hari ini (WIB)
+  mode?: 'demo' | 'paper' | 'live';
+  venue?: 'binance' | 'hyperliquid';
+  state?: 'starting' | 'running' | 'paused' | 'halted';
+  face?: 'front' | 'back';
+  onFaceChange?: (f: 'front' | 'back') => void; // klik pusher
+  highlight?: ChronoPart | null; // dari hover legenda
+  onHighlight?: (p: ChronoPart | null) => void; // dari hover bagian 3D
+  ariaLabel?: string;
 }
 
 const DIAL_R = 2;
