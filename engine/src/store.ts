@@ -5,6 +5,7 @@ import { join } from 'node:path';
 // dir = null -> hanya di memori (dipakai pembuat snapshot demo & test).
 export class Store {
   private mem = new Map<string, unknown>();
+  private memRows = new Map<string, unknown[]>();
 
   constructor(public dir: string | null) {
     if (dir) mkdirSync(dir, { recursive: true });
@@ -32,12 +33,17 @@ export class Store {
   }
 
   appendJsonl(name: string, row: unknown) {
-    if (!this.dir) return;
+    if (!this.dir) {
+      const rows = this.memRows.get(name) ?? [];
+      rows.push(row);
+      this.memRows.set(name, rows);
+      return;
+    }
     appendFileSync(join(this.dir, `${name}.jsonl`), `${JSON.stringify(row)}\n`);
   }
 
   readJsonl<T>(name: string, limit = Infinity): T[] {
-    if (!this.dir) return [];
+    if (!this.dir) return ((this.memRows.get(name) ?? []) as T[]).slice(-Math.min(this.memRows.get(name)?.length ?? 0, limit));
     const f = join(this.dir, `${name}.jsonl`);
     if (!existsSync(f)) return [];
     const lines = readFileSync(f, 'utf8').split('\n').filter(Boolean);

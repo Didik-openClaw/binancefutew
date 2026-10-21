@@ -433,8 +433,10 @@ export class Engine extends EventEmitter {
   // lalu dibandingkan dengan ekuitas broker. Paper: harus sama sampai sen. Live: posisi harus sama.
   async audit(now: number) {
     const { broker, store } = this.d;
-    const trades = store.dir ? store.readJsonl<TradeView>('trades') : this.trades;
-    const fundingTotal = broker.fundingPaid?.() ?? this.fundingLog.reduce((a, f) => a + f.amount, 0);
+    // Buku besar lengkap (file / memori), bukan 500 baris terakhir yang ditampilkan.
+    const trades = store.readJsonl<TradeView>('trades');
+    const fundingRows = store.readJsonl<FundingEntry>('funding');
+    const fundingTotal = broker.fundingPaid?.() ?? fundingRows.reduce((a, f) => a + f.amount, 0);
     const brokerPos = await broker.positions();
     const coins = [...new Set([...trades.map((t) => t.coin), ...Object.keys(brokerPos)])];
     const marks = coins.length ? await broker.markPrices(coins) : {};
@@ -456,7 +458,7 @@ export class Engine extends EventEmitter {
       endEquity: brokerEquity,
       netPnl: brokerEquity - this.startEquity,
       tradeCount: trades.length,
-      fundingEvents: this.fundingLog.length,
+      fundingEvents: fundingRows.length,
       reconciled: broker.live ? positionsMatch : positionsMatch && Math.abs(diff) < 0.01,
       ledgerEquity,
       diff,
