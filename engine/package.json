@@ -1,0 +1,27 @@
+{
+  "name": "@kairos/engine",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/cli.ts run",
+    "demo": "tsx src/cli.ts run --demo",
+    "tournament": "tsx src/cli.ts tournament",
+    "scout": "tsx src/cli.ts scout",
+    "demo:snapshot": "tsx src/cli.ts demo-snapshot",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ccxt": "4.5.75",
+    "ws": "8.18.3",
+    "zod": "4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.0",
+    "@types/ws": "8.18.1",
+    "tsx": "4.20.5",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@kairos/dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single && node scripts/to-artifact.mjs",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource-variable/bodoni-moda": "5.2.6",
+    "@fontsource-variable/geist": "5.2.6",
+    "@fontsource-variable/geist-mono": "5.2.6",
+    "@react-three/drei": "10.7.6",
+    "@react-three/fiber": "9.4.0",
+    "lightweight-charts": "5.0.8",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "@types/three": "0.180.0",
+    "@vitejs/plugin-react": "5.0.2",
+    "typescript": "5.9.2",
+    "vite": "7.1.5",
+    "vite-plugin-singlefile": "2.3.0"
+  }
+}
