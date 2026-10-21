@@ -79,8 +79,9 @@ Deflated Sharpe Ratio (Bailey & López de Prado) menjawab pertanyaan kunci turna
 
 - **Leader Hyperliquid**: semua posisi wallet Hyperliquid publik, jadi cukup alamatnya (otomatis dari scout atau manual via `LEADERS`).
 - **Scout sampai dapat**: kandidat dianalisis per 20 trader (fill 7 hari, posisi direkonstruksi untuk mengukur lama pegang, kurva PnL 30 hari) sampai yang lolos ≥ 2× jumlah slot, leaderboard habis, atau 40 trader (`SCOUT_DEEP_DIVE`). Bila kurang, saringan awal (ukuran akun, ROI 7 hari) dilonggarkan. Uji kelayakan salin (bukan bot, bukan scalper < 10 menit, bukan untung sekali, drawdown dalam batas) tidak pernah dilonggarkan.
-- **Skor trader**: ROI 7 hari 35%, ROI 30 hari 20%, win rate 15%, profit factor 10%, drawdown 10%, hari profit 10% (peringkat persentil).
-- **Ukuran**: target notional = (notional leader ÷ ekuitas leader) × modal sleeve × bobot leader × pengali copy. Posisi disinkronkan tiap tick (default 10 detik). Pengurangan & penutupan dieksekusi sebelum penambahan.
+- **Skor trader**: ROI 7 hari 35%, ROI 30 hari 20%, win rate 15%, profit factor 10%, drawdown 10%, hari profit 10% (peringkat persentil). ROI dihitung dari modal trading sebenarnya (akun unified: stablecoin + PnL belum terealisasi, bukan saldo perp saja).
+- **Uji salin historis** (`SCOUT_VET_DAYS`, default 120 hari; `SCOUT_VET_TOP`, default 12 kandidat): skor scout mengukur trader, bukan hasil kita. Kandidat teratas disalin ulang dari fill aslinya dengan $1.000, ukuran & batas profil, fee, slippage, keterlambatan, funding per jam, dan kill switch. Hanya yang aktif ≥ 8 minggu, untung, kill switch ≤ 1× per 10 minggu, drawdown ≤ 2× batas kill switch, dan PSR mingguan ≥ 0.8 yang boleh disalin. Yang lolos diurutkan menurut pertumbuhan mingguan geometris.
+- **Ukuran**: target notional = (notional leader ÷ ekuitas leader) × modal sleeve × bobot leader × pengali copy (`COPY_MULTIPLIER`, default dari profil). Posisi disinkronkan tiap tick (default 10 detik). Pengurangan & penutupan dieksekusi sebelum penambahan.
 - **Eksekusi** ke Hyperliquid atau Binance (simbol `kPEPE` ↔ `1000PEPEUSDT` dipetakan otomatis; koin yang tidak ada di venue dilewati).
 - **Data leader basi** (> 120 detik): rebalancing ditahan, bukan menebak.
 - **Leader Binance**: akun Binance yang membagikan API key read-only (mis. akun sinyal Anda sendiri) bisa ikut disalin lewat `BINANCE_LEADER_API_KEY` / `BINANCE_LEADER_API_SECRET`. Posisi trader di leaderboard Binance tidak tersedia lewat API resmi, jadi scout otomatis hanya memakai Hyperliquid.
@@ -114,7 +115,8 @@ Futures dengan leverage bisa menghabiskan modal. Tidak ada metode yang menjamin 
 | `npm run hunt` | Seleksi lengkap (uji kelayakan → turnamen → scout trader) dari data asli, cetak kesimpulan & simpan |
 | `npm run hunt -- --demo` | Sama, di pasar & trader sintetis (tanpa internet) |
 | `npm run tournament` | Hanya turnamen strategi |
-| `npm run scout` | Hanya scout trader Hyperliquid |
+| `npm run scout` | Scout trader Hyperliquid + uji salin historis, simpan hasil |
+| `npm run replay -- 0xADDR --days=200 --start=1000 --mult=0.5,1,1.5` | Replay $1.000 menyalin wallet dari fill aslinya; `--save-view` menampilkannya di Laporan, `--reuse` memakai ulang candle tersimpan, `--summary=file.json` ringkasan mingguan |
 | `npm run dev` | Dashboard dev server (Vite) |
 | `npm run build` | Build dashboard ke `dashboard/dist` |
 | `npm run build:single` | Dashboard satu file HTML dengan data demo |
@@ -125,9 +127,18 @@ Data & state disimpan di `data/` (cache candle, akun paper, trade, ekuitas).
 
 **Sumber data.** `DATA_SOURCE=auto` memakai Binance (riwayat 1 jam lebih panjang) dan otomatis pindah ke Hyperliquid bila Binance menolak lokasi server (HTTP 451, mis. server di AS). Hyperliquid hanya menyimpan ±5000 candle terakhir per interval (±29 minggu untuk 1 jam), jadi uji walk-forward lebih pendek. Di jaringan yang memakai proxy HTTP, jalankan dengan `NODE_USE_ENV_PROXY=1` supaya `fetch` bawaan Node memakai `HTTPS_PROXY`.
 
+## Laporan & bukti
+
+Halaman **Laporan** di dashboard dibuat supaya setiap angka bisa diperiksa:
+
+- **Statement**: modal awal, PnL terealisasi, fee, funding, PnL belum terealisasi, ekuitas akhir.
+- **Rekonsiliasi** tiap menit: ekuitas dihitung ulang dari buku besar (setiap order & funding) dan harga mark, lalu dibandingkan dengan saldo akun.
+- **Bukti historis**: kurva $1.000 menyalin trader terpilih dari fill aslinya, dengan semua asumsi biaya dan SHA-256 input (fill, candle, funding, kurva modal trader) di `data/state/replay/`. Siapa pun bisa menghitung ulang dengan `npm run replay`.
+- **Asal data**: endpoint yang dipakai, link explorer wallet yang disalin, posisi terakhir yang dibaca, dan SHA-256 file buku besar di `data/state`.
+
 ## Pengujian
 
-`npm test` menjalankan 39 test, termasuk:
+`npm test` menjalankan 46 test, termasuk:
 
 - **Tanpa lookahead**: mengubah harga masa depan tidak boleh mengubah posisi masa lalu, untuk ketujuh strategi.
 - Pemilihan minggu *k* tidak melihat return minggu *k*; seluruh pipeline nested walk-forward tidak berubah bila harga masa depan diubah.
@@ -135,4 +146,6 @@ Data & state disimpan di `data/` (cache candle, akun paper, trade, ekuitas).
 - Scout terus menggali saat kandidat teratas ditolak, melonggarkan saringan awal bila perlu, dan menghormati batas analisis.
 - Backtester, kill switch, PnL paper broker, matematika mirror & rencana order (flip, band, reduce-first), saringan scout.
 - Leader yang datanya basi membekukan order; leader yang mati > 5× batas dikeluarkan dengan peringatan.
-- Simulasi end-to-end: seleksi mingguan → copy leader → order → snapshot dashboard.
+- Simulasi end-to-end: seleksi mingguan → copy leader → order → snapshot dashboard, dengan statement yang cocok dengan buku besar.
+- Replay copy trading: ekuitas akhir sama dengan audit ledger independen; mirror vs new-only; kill switch; funding.
+- Arus dana akun unified (deposit, penarikan, kiriman, belanja spot) dan uji salin historis (trader yang baru aktif ditolak walau skor scout lebih tinggi).
