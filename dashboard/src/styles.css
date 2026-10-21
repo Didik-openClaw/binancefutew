@@ -1065,6 +1065,43 @@ tbody tr.hot {
   border-left-color: var(--warn);
 }
 
+/* ------------------------------------------------------------------ funnel */
+.funnel {
+  display: grid;
+  gap: 8px;
+}
+
+.funnel-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 160px) minmax(0, 1fr) 44px;
+  gap: 12px;
+  align-items: center;
+  font-size: var(--t-small);
+}
+
+.funnel-label {
+  color: var(--ivory-2);
+}
+
+.funnel-track {
+  height: 10px;
+  background: var(--rule-soft);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.funnel-track i {
+  display: block;
+  height: 100%;
+  background: var(--series-1);
+  border-radius: 0 4px 4px 0;
+}
+
+.funnel-n {
+  text-align: right;
+  color: var(--ivory);
+}
+
 /* ------------------------------------------------------------------ risk */
 .profiles {
   display: grid;

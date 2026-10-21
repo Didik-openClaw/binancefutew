@@ -59,6 +59,13 @@ export interface StrategyStats {
   exposure: number; // average |position|
 }
 
+export interface GateResult {
+  passed: boolean; // lolos di tingkat saringan yang dipakai minggu ini
+  failed?: string; // gerbang pertama yang gagal
+  psr: number; // Probabilistic Sharpe Ratio (peluang Sharpe > 0)
+  dsr: number; // Deflated Sharpe Ratio (dikoreksi jumlah kandidat)
+}
+
 export interface TournamentEntry {
   id: string;
   strategy: string;
@@ -67,12 +74,37 @@ export interface TournamentEntry {
   universe: string[]; // coins
   score: number;
   stats: StrategyStats;
+  gate: GateResult;
   weeklyReturns: number[]; // lookback window, oldest -> newest
+}
+
+export type QualificationLevel = 0 | 1 | 2 | 3;
+
+export interface QualificationReport {
+  level: QualificationLevel; // 0 Ketat, 1 Standar, 2 Longgar, 3 Darurat
+  levelLabel: string;
+  tested: number;
+  qualified: number;
+  expectedMaxSharpe: number; // Sharpe tahunan yang bisa didapat juara "karena untung-untungan"
+  funnel: { label: string; remaining: number }[];
+  universe: string[];
+  expanded: boolean; // universe diperluas karena kandidat lolos kurang
+}
+
+export interface RuleReport {
+  id: string;
+  label: string;
+  lookback: number;
+  halfLife: number;
+  oosReturn: number;
+  maxDrawdown: number;
+  winRateWeeks: number;
+  chosen: boolean;
 }
 
 export interface PolicyReport {
   // Hasil out-of-sample dari aturan "pilih juara tiap Senin, pakai 1 minggu"
-  weeks: { weekStart: number; pickedId: string; pickedLabel: string; ret: number; benchmark: number }[];
+  weeks: { weekStart: number; pickedId: string; pickedLabel: string; rule: string; level: QualificationLevel; ret: number; benchmark: number }[];
   totalReturn: number;
   benchmarkReturn: number; // buy & hold coin acuan
   maxDrawdown: number;
@@ -88,8 +120,11 @@ export interface TournamentReport {
   dataFrom: number;
   dataTo: number;
   benchmarkCoin: string;
-  entries: TournamentEntry[]; // sorted by score desc
-  policy: PolicyReport;
+  entries: TournamentEntry[]; // lolos saringan dulu, lalu skor menurun
+  policy: PolicyReport; // aturan seleksi terpilih tiap minggu, out-of-sample
+  rules: RuleReport[];
+  chosenRule: string;
+  qualification: QualificationReport;
   synthetic: boolean;
 }
 
@@ -103,11 +138,24 @@ export interface LeaderView {
   winRate: number | null;
   maxDrawdown: number | null;
   fillsPerDay: number | null;
+  holdHours: number | null; // median lama posisi dipegang
+  scalpShare: number | null; // porsi profit dari posisi < 10 menit (sulit disalin)
+  positiveDays: number | null; // porsi hari profit dalam 30 hari
   score: number;
   weight: number; // allocation inside copy sleeve, 0 if not copied
   status: 'copying' | 'candidate' | 'rejected';
   reason?: string;
   openPositions: number;
+}
+
+export interface ScoutSummary {
+  ranAt: number;
+  leaderboardSize: number;
+  analyzed: number; // jumlah trader yang dianalisis mendalam
+  rounds: number;
+  level: number; // 0 ketat .. 2 longgar
+  levelLabel: string;
+  qualified: number;
 }
 
 export interface Playbook {
@@ -178,6 +226,7 @@ export interface DashboardSnapshot {
   playbook: Playbook | null;
   tournament: TournamentReport | null;
   leaders: LeaderView[];
+  scout: ScoutSummary | null;
   risk: RiskState;
   status: EngineStatus;
   alerts: EngineAlert[];

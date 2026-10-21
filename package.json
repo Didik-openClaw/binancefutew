@@ -15,6 +15,7 @@
     "engine": "npm run start -w engine",
     "demo": "npm run demo -w engine",
     "tournament": "npm run tournament -w engine",
+    "hunt": "npm run hunt -w engine",
     "scout": "npm run scout -w engine",
     "demo:snapshot": "npm run demo:snapshot -w engine",
     "dev": "npm run dev -w dashboard",

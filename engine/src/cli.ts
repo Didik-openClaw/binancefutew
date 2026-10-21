@@ -1,10 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { startApi } from './api/server';
-import { describePolicyEdge, fmtPct, runTournament } from './backtest/tournament';
 import { BINANCE_LEADER_ID, loadConfig } from './config';
 import { Engine } from './copy/engine';
-import { RealMarket } from './data/market';
+import { type MarketHistory, RealMarket } from './data/market';
 import { DemoWorld } from './demo/world';
 import { BinanceFeed, HyperliquidFeed } from './exchanges/feeds';
 import { BinanceLiveBroker, HyperliquidLiveBroker } from './exchanges/live';
@@ -12,7 +11,9 @@ import { PaperBroker } from './exchanges/paper';
 import type { Broker } from './exchanges/types';
 import { HOUR, sleep, WEEK } from './lib/time';
 import { RISK_PROFILES } from './risk/profiles';
-import { runScout } from './scout/hyperliquidScout';
+import { hyperliquidSource, runScout, type ScoutOptions, type ScoutResult } from './scout/hyperliquidScout';
+import { printScout, printTournament, printVerdict } from './report';
+import { runSelection } from './weekly';
 import { BinanceAccountLeader, HyperliquidWalletLeader } from './sources/leaders';
 import { Store } from './store';
 
@@ -63,44 +64,52 @@ async function main() {
   const demo = args.includes('--demo') || cmd === 'demo-snapshot';
   const cfg = loadConfig(demo ? { MODE: 'demo' } : {});
 
-  if (cmd === 'tournament') {
-    const market = new RealMarket(join(cfg.dataDir, 'cache'), log);
-    const weeks = cfg.lookbackWeeks + cfg.walkForwardWeeks + 3;
-    log(`Mengunduh ${weeks} minggu candle ${cfg.strategyInterval} untuk ${cfg.universe.join(', ')}…`);
-    const { d, funding, failed } = await market.dataset(cfg.universe, cfg.strategyInterval, weeks);
-    if (failed.length) log(`Tanpa data: ${failed.join(', ')}`);
+  if (cmd === 'tournament' || cmd === 'hunt') {
+    // hunt = turnamen strategi + scout trader, sama persis dengan siklus Senin di engine.
     const profile = RISK_PROFILES[cfg.riskProfile];
-    const run = runTournament(d, {
+    let market: MarketHistory = new RealMarket(join(cfg.dataDir, 'cache'), log);
+    let scout: ((o: ScoutOptions) => Promise<ScoutResult>) | null = cmd === 'hunt' ? (o) => runScout(o, hyperliquidSource(), log) : null;
+    let now = Date.now();
+    let universe = cfg.universe;
+    if (args.includes('--demo')) {
+      log('DEMO: pasar & trader sintetis.');
+      const world = new DemoWorld({ seed: 1, start: Math.floor(now / HOUR) * HOUR, historyWeeks: 52, futureWeeks: 1 });
+      market = world;
+      scout = cmd === 'hunt' ? world.scout : null;
+      now = world.clock();
+      universe = await world.listCoins();
+    }
+    const sel = await runSelection({
+      cfg: { ...cfg, universe },
+      market,
       profile,
-      lookbackWeeks: cfg.lookbackWeeks,
-      walkForwardWeeks: cfg.walkForwardWeeks,
-      benchmark: cfg.benchmark,
-      cost: { feeRate: cfg.venue === 'hyperliquid' ? 0.00045 : 0.0005, slippage: 0.0003, funding },
+      feeRate: cfg.venue === 'hyperliquid' ? 0.00045 : 0.0005,
+      scout,
+      supports: () => true,
+      log,
+      now,
     });
-    console.log(`\nTURNAMEN STRATEGI · profil ${profile.label} · ${run.candidates.length} kandidat · ${run.report.lookbackWeeks} minggu terakhir\n`);
-    console.log('Rank  Skor     12m-ret  Mgg-lalu  MaxDD   Sharpe  Entri  Strategi');
-    run.report.entries.slice(0, 20).forEach((e, i) => {
-      console.log(
-        `${String(i + 1).padStart(4)}  ${e.score.toFixed(4).padStart(7)}  ${fmtPct(e.stats.totalReturn).padStart(7)}  ${fmtPct(e.stats.lastWeek).padStart(8)}  ${fmtPct(-e.stats.maxDrawdown).padStart(6)}  ${e.stats.sharpe.toFixed(2).padStart(6)}  ${String(e.stats.trades).padStart(5)}  ${e.label}`,
-      );
-    });
-    console.log(`\nPilihan minggu depan:`);
-    for (const p of run.picks) console.log(`  ${(p.weight * 100).toFixed(0)}%  ${p.candidate.label}`);
-    console.log(`\nValidasi out-of-sample (${run.report.policy.weeks.length} minggu): ${describePolicyEdge(run.report.policy)}`);
-    const store = new Store(join(cfg.dataDir, 'state'));
-    store.writeJson('tournament', run.report);
+    if (sel.failedCoins.length) log(`Tanpa data: ${sel.failedCoins.join(', ')}`);
+    printTournament(sel.run);
+    if (sel.scoutError) log(`Scout gagal: ${sel.scoutError}`);
+    if (sel.leaders) printScout(sel.leaders, sel.scout);
+    printVerdict(sel.run, sel.leaders, cfg.allocStrategy);
+    if (!args.includes('--demo')) {
+      const store = new Store(join(cfg.dataDir, 'state'));
+      store.writeJson('tournament', sel.run.report);
+      if (sel.leaders) {
+        store.writeJson('leaders', sel.leaders);
+        store.writeJson('scout', sel.scout);
+      }
+      log('Hasil disimpan di data/state; engine memakainya sampai siklus Senin berikutnya.');
+    }
     return;
   }
 
   if (cmd === 'scout') {
     const profile = RISK_PROFILES[cfg.riskProfile];
-    const leaders = await runScout({ ...cfg.scout, slots: profile.leaderSlots, concentration: profile.concentration }, log);
-    console.log('\nStatus     Skor  Bobot  ROI-7h   ROI-30h  WinRate  DD-30h  Fill/h  Trader');
-    for (const l of leaders.slice(0, 25)) {
-      console.log(
-        `${l.status.padEnd(9)}  ${l.score.toFixed(2)}  ${(l.weight * 100).toFixed(0).padStart(4)}%  ${fmtPct(l.weekRoi).padStart(7)}  ${fmtPct(l.monthRoi).padStart(7)}  ${l.winRate === null ? '   -' : `${(l.winRate * 100).toFixed(0)}%`.padStart(6)}  ${l.maxDrawdown === null ? '   -' : fmtPct(-l.maxDrawdown).padStart(6)}  ${l.fillsPerDay?.toFixed(0).padStart(6)}  ${l.label} ${l.address}${l.reason ? `\n           ↳ ${l.reason}` : ''}`,
-      );
-    }
+    const r = await runScout({ ...cfg.scout, slots: profile.leaderSlots, concentration: profile.concentration }, hyperliquidSource(), log);
+    printScout(r.leaders, r.summary);
     return;
   }
 
@@ -136,7 +145,7 @@ async function main() {
           address === BINANCE_LEADER_ID && cfg.binanceLeader
             ? new BinanceAccountLeader(address, 'Akun Binance (read-only)', cfg.binanceLeader.apiKey, cfg.binanceLeader.apiSecret)
             : new HyperliquidWalletLeader(address, label),
-        scout: (o) => runScout(o, log),
+        scout: (o) => runScout(o, hyperliquidSource(), log),
         synthetic: false,
         log,
       });
@@ -159,7 +168,7 @@ async function main() {
     return;
   }
 
-  console.log('Perintah: run [--demo] | tournament | scout | demo-snapshot [--out=path]');
+  console.log('Perintah: run [--demo] | hunt [--demo] | tournament [--demo] | scout | demo-snapshot [--out=path]');
 }
 
 main().catch((e) => {

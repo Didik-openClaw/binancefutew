@@ -7,6 +7,7 @@
     "start": "tsx src/cli.ts run",
     "demo": "tsx src/cli.ts run --demo",
     "tournament": "tsx src/cli.ts tournament",
+    "hunt": "tsx src/cli.ts hunt",
     "scout": "tsx src/cli.ts scout",
     "demo:snapshot": "tsx src/cli.ts demo-snapshot",
     "test": "vitest run",

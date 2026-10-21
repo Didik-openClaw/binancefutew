@@ -34,6 +34,7 @@ export interface HlFill {
   side: 'A' | 'B';
   time: number;
   dir: string; // "Open Long", "Close Short", ...
+  startPosition?: string; // posisi sebelum fill ini (bertanda)
   closedPnl: string;
   fee: string;
   oid: number;

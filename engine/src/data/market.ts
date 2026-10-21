@@ -2,12 +2,17 @@ import { join } from 'node:path';
 import { intervalMs, WEEK } from '../lib/time';
 import type { Dataset } from '../strategies/types';
 import { buildDataset } from './dataset';
+import { BINANCE_FAPI } from './binancePublic';
 import { fundingPerBar, loadHistory } from './history';
+import { fromBinanceSymbol } from './symbols';
+import { fetchJson } from '../lib/http';
 
 // Penyedia data historis untuk turnamen dan sleeve strategi.
 export interface MarketHistory {
   dataset(coins: string[], interval: string, weeks: number): Promise<{ d: Dataset; funding?: Record<string, Float64Array>; failed: string[] }>;
   recent(coins: string[], interval: string, bars: number): Promise<Dataset>;
+  // Koin paling likuid (untuk memperluas pencarian bila kandidat lolos kurang).
+  topCoins?(n: number): Promise<string[]>;
 }
 
 // Data asli: Binance (riwayat lebih panjang), koin yang tidak ada di Binance diambil dari Hyperliquid.
@@ -35,6 +40,17 @@ export class RealMarket implements MarketHistory {
     const h = await this.load(coins, interval, weeks, true);
     const d = buildDataset(h.raw, interval, { benchmark: coins[0] });
     return { d, funding: fundingPerBar(d, h.funding), failed: h.failed.map((f) => f.coin) };
+  }
+
+  async topCoins(n: number) {
+    const rows = await fetchJson<{ symbol: string; quoteVolume: string }[]>(`${BINANCE_FAPI}/fapi/v1/ticker/24hr`);
+    const stable = new Set(['USDC', 'FDUSD', 'TUSD', 'USDP', 'DAI', 'BUSD', 'USDE']);
+    return rows
+      .map((r) => ({ coin: fromBinanceSymbol(r.symbol), vol: Number(r.quoteVolume) }))
+      .filter((r): r is { coin: string; vol: number } => !!r.coin && !stable.has(r.coin))
+      .sort((a, b) => b.vol - a.vol)
+      .slice(0, n)
+      .map((r) => r.coin);
   }
 
   async recent(coins: string[], interval: string, bars: number) {

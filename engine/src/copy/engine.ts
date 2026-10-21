@@ -7,17 +7,18 @@ import type {
   Playbook,
   PositionView,
   RiskProfileId,
+  ScoutSummary,
   TournamentReport,
   TradeView,
 } from '../../../shared/types';
-import { runTournament } from '../backtest/tournament';
 import type { Config } from '../config';
 import type { MarketHistory } from '../data/market';
 import type { Broker, BrokerPosition, Fill } from '../exchanges/types';
 import { nextWeekStart, WEEK, weekStart } from '../lib/time';
 import { RISK_PROFILES } from '../risk/profiles';
 import { RiskManager, type RiskPersisted } from '../risk/riskManager';
-import type { ScoutOptions } from '../scout/hyperliquidScout';
+import type { ScoutOptions, ScoutResult } from '../scout/hyperliquidScout';
+import { runSelection } from '../weekly';
 import type { LeaderSnapshot, LeaderSource } from '../sources/leaders';
 import type { Store } from '../store';
 import { capTargets, computeTargets, planOrders } from './mirror';
@@ -30,7 +31,7 @@ export interface EngineDeps {
   market: MarketHistory;
   clock: () => number;
   leaderSource: (address: string, label?: string) => LeaderSource;
-  scout: (o: ScoutOptions) => Promise<LeaderView[]>;
+  scout: (o: ScoutOptions) => Promise<ScoutResult>;
   synthetic: boolean;
   log?: (m: string) => void;
 }
@@ -50,6 +51,7 @@ export class Engine extends EventEmitter {
   private playbook: Playbook | null;
   private tournament: TournamentReport | null;
   private leaders: LeaderView[];
+  private scoutSummary: ScoutSummary | null;
   private sources = new Map<string, LeaderSource>();
   private lastSnap = new Map<string, LeaderSnapshot>();
   private firstFail = new Map<string, number>();
@@ -80,6 +82,7 @@ export class Engine extends EventEmitter {
     this.playbook = store.readJson<Playbook | null>('playbook', null);
     this.tournament = store.readJson<TournamentReport | null>('tournament', null);
     this.leaders = store.readJson<LeaderView[]>('leaders', []);
+    this.scoutSummary = store.readJson<ScoutSummary | null>('scout', null);
     this.baseline = store.readJson<Baseline>('baseline', {});
     this.equity = store.readJsonl<EquityPoint>('equity', MAX_EQUITY_POINTS);
     this.trades = store.readJsonl<TradeView>('trades', 500);
@@ -121,36 +124,34 @@ export class Engine extends EventEmitter {
     const now = this.d.clock();
     try {
       this.alert('info', `Menjalankan seleksi mingguan (${reason})…`);
-      const weeks = cfg.lookbackWeeks + cfg.walkForwardWeeks + 3;
-      const { d, funding, failed } = await this.d.market.dataset(cfg.universe, cfg.strategyInterval, weeks);
-      if (failed.length) this.alert('warn', `Data tidak tersedia untuk: ${failed.join(', ')}`);
-      const run = runTournament(
-        d,
-        {
-          profile: this.risk.profile,
-          lookbackWeeks: cfg.lookbackWeeks,
-          walkForwardWeeks: cfg.walkForwardWeeks,
-          benchmark: cfg.benchmark,
-          cost: { feeRate: this.d.broker.venue === 'hyperliquid' ? 0.00045 : 0.0005, slippage: 0.0003, funding },
-        },
+      const sel = await runSelection({
+        cfg,
+        market: this.d.market,
+        profile: this.risk.profile,
+        feeRate: this.d.broker.venue === 'hyperliquid' ? 0.00045 : 0.0005,
+        scout: cfg.autoScout ? this.d.scout : null,
+        supports: (c) => this.d.broker.supports(c),
+        log: (m) => this.log(m),
         now,
+      });
+      const { run } = sel;
+      if (sel.failedCoins.length) this.alert('warn', `Data tidak tersedia untuk: ${sel.failedCoins.join(', ')}`);
+      const q = run.report.qualification;
+      this.alert(
+        q.level >= 2 ? 'warn' : 'info',
+        `Turnamen: ${q.qualified} dari ${q.tested} kandidat lolos saringan ${q.levelLabel}${q.expanded ? ' (universe diperluas)' : ''}; aturan seleksi terpilih ${run.report.chosenRule}.`,
       );
       this.tournament = run.report;
       this.d.store.writeJson('tournament', run.report);
 
       let leaders: LeaderView[] = [];
-      if (cfg.autoScout) {
-        try {
-          leaders = await this.d.scout({
-            ...cfg.scout,
-            slots: this.risk.profile.leaderSlots,
-            concentration: this.risk.profile.concentration,
-            supports: (c) => this.d.broker.supports(c),
-          });
-        } catch (e) {
-          this.alert('warn', `Scout leader gagal: ${e instanceof Error ? e.message : e}. Memakai leader minggu lalu.`);
-          leaders = this.leaders;
-        }
+      if (sel.scoutError) {
+        this.alert('warn', `Scout leader gagal: ${sel.scoutError}. Memakai leader minggu lalu.`);
+        leaders = this.leaders;
+      } else if (sel.leaders) {
+        leaders = sel.leaders;
+        this.scoutSummary = sel.scout;
+        this.d.store.writeJson('scout', sel.scout);
       }
       leaders = this.mergeManualLeaders(leaders);
       this.leaders = leaders;
@@ -168,7 +169,7 @@ export class Engine extends EventEmitter {
               : { strategy: cfg.allocStrategy, copy: 1 - cfg.allocStrategy };
       const ws = weekStart(now);
       const notes: string[] = [];
-      if (run.picks[0]) notes.push(`Juara strategi: ${run.picks[0].candidate.label} (skor ${run.picks[0].score.toFixed(4)})`);
+      if (run.picks[0]) notes.push(`Juara strategi: ${run.picks[0].candidate.label} (skor ${run.picks[0].score.toFixed(4)}, saringan ${q.levelLabel})`);
       notes.push(
         `Uji rotasi ${run.report.policy.weeks.length} minggu: ${(run.report.policy.totalReturn * 100).toFixed(1)}% vs ${run.report.benchmarkCoin} ${(run.report.policy.benchmarkReturn * 100).toFixed(1)}%`,
       );
@@ -200,7 +201,8 @@ export class Engine extends EventEmitter {
     const manual = this.d.cfg.manualLeaders.map((a) => a.toLowerCase());
     if (!manual.length) return list;
     const out = list.map((l) => ({ ...l }));
-    const share = 1 / (manual.length + Math.max(1, out.filter((l) => l.status === 'copying').length));
+    const copyingCount = out.filter((l) => l.status === 'copying').length;
+    const share = 1 / (manual.length + copyingCount);
     for (const l of out) if (l.status === 'copying') l.weight *= 1 - share * manual.length;
     for (const addr of manual) {
       const existing = out.find((l) => l.address === addr);
@@ -219,6 +221,9 @@ export class Engine extends EventEmitter {
           winRate: null,
           maxDrawdown: null,
           fillsPerDay: null,
+          holdHours: null,
+          scalpShare: null,
+          positiveDays: null,
           score: 0,
           weight: share,
           status: 'copying',
@@ -491,6 +496,7 @@ export class Engine extends EventEmitter {
       playbook: this.playbook,
       tournament: this.tournament && { ...this.tournament, entries: this.tournament.entries.slice(0, 40) },
       leaders: this.leaders,
+      scout: this.scoutSummary,
       risk: this.risk.view(equity),
       status: {
         state: this.state,

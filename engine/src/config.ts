@@ -53,6 +53,7 @@ const Env = z.object({
   SCOUT_MAX_TURNOVER: num,
   SCOUT_MAX_FILLS_PER_DAY: num,
   SCOUT_MAX_DRAWDOWN: num,
+  SCOUT_DEEP_DIVE: num,
   API_HOST: z.string().optional(),
   API_PORT: num,
   DASHBOARD_TOKEN: z.string().optional(),
@@ -105,7 +106,7 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}) {
       maxWeeklyTurnover: e.SCOUT_MAX_TURNOVER ?? 200,
       maxFillsPerDay: e.SCOUT_MAX_FILLS_PER_DAY ?? 150,
       maxDrawdown: e.SCOUT_MAX_DRAWDOWN ?? 0.45,
-      deepDive: 40,
+      deepDive: e.SCOUT_DEEP_DIVE ?? 40,
     },
     api: {
       host: e.API_HOST ?? '127.0.0.1',

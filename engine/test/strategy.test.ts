@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { backtest, weekSlices, weeklyReturns } from '../src/backtest/backtester';
 import { compound, maxDrawdownFromReturns } from '../src/backtest/metrics';
-import { runTournament, selectPicks, buildCandidates } from '../src/backtest/tournament';
+import { buildCandidates, type Candidate, GATES, RULES, runTournament, selectPicks } from '../src/backtest/tournament';
+import { dsr, expectedMaxSharpe, normCdf, normInv, psr } from '../src/backtest/stats';
+import { gaussian, mulberry32 } from '../src/lib/rng';
+import { STRATEGIES as ALL } from '../src/strategies/catalog';
 import { buildDataset } from '../src/data/dataset';
 import { syntheticCandles } from '../src/demo/synthetic';
 import { atr, ema, priorMax, priorMin, rsi } from '../src/lib/indicators';
@@ -123,10 +126,27 @@ describe('turnamen mingguan', () => {
   it('pemilihan minggu k tidak melihat return minggu k', () => {
     const { candidates } = buildCandidates(d, opts);
     const k = 15;
-    const before = selectPicks(candidates, k, opts).map((p) => p.candidate.id);
-    const tampered = candidates.map((c) => ({ ...c, weekly: c.weekly.map((r, i) => (i >= k ? r + (c.id.length % 7) * 0.5 : r)) }));
-    const after = selectPicks(tampered, k, opts).map((p) => p.candidate.id);
-    expect(after).toEqual(before);
+    const rule = RULES.find((r) => r.id === 'L8-H4')!;
+    const before = selectPicks(candidates, k, rule, opts);
+    const tampered = candidates.map((c) => ({
+      ...c,
+      weekly: c.weekly.map((r, i) => (i >= k ? r + (c.id.length % 7) * 0.5 : r)),
+      daily: c.daily.map((w, i) => (i >= k ? w.map((x) => x + 0.3) : w)),
+    }));
+    const after = selectPicks(tampered, k, rule, opts);
+    expect(after.picks.map((p) => p.candidate.id)).toEqual(before.picks.map((p) => p.candidate.id));
+    expect(after.level).toBe(before.level);
+  });
+
+  it('seluruh pipeline (gerbang + pilihan aturan bersarang) tidak melihat masa depan', () => {
+    const base = runTournament(d, opts, END);
+    const cutWeek = base.report.policy.weeks[base.report.policy.weeks.length - 3].weekStart;
+    const future: Dataset = structuredClone(d);
+    const cut = future.t.findIndex((t) => t >= cutWeek);
+    for (const c of future.coins) for (let i = cut; i < future.t.length; i++) future.series[c].c[i] *= 1 + 0.2 * Math.sin(i);
+    const changed = runTournament(future, opts, END);
+    const early = (r: typeof base) => r.report.policy.weeks.filter((w) => w.weekStart < cutWeek).map((w) => [w.pickedId, w.rule, w.level, w.ret.toFixed(10)]);
+    expect(early(changed)).toEqual(early(base));
   });
 
   it('menghasilkan pilihan dengan bobot total 1 dan laporan walk-forward', () => {
@@ -136,7 +156,17 @@ describe('turnamen mingguan', () => {
     expect(run.picks.reduce((a, p) => a + p.weight, 0)).toBeCloseTo(1);
     expect(new Set(run.picks.map((p) => p.candidate.diversityKey)).size).toBe(run.picks.length);
     expect(run.report.policy.weeks.length).toBe(10);
-    expect(run.report.entries[0].score).toBeGreaterThanOrEqual(run.report.entries[1].score);
+    const e = run.report.entries;
+    for (let i = 1; i < e.length; i++) {
+      // Yang lolos saringan selalu di atas; di dalam kelompok yang sama urut skor.
+      expect(Number(e[i - 1].gate.passed)).toBeGreaterThanOrEqual(Number(e[i].gate.passed));
+      if (e[i - 1].gate.passed === e[i].gate.passed) expect(e[i - 1].score).toBeGreaterThanOrEqual(e[i].score);
+    }
+    expect(run.report.rules.filter((r) => r.chosen).length).toBe(1);
+    const q = run.report.qualification;
+    expect(q.funnel[0].remaining).toBe(q.tested);
+    for (let i = 1; i < q.funnel.length; i++) expect(q.funnel[i].remaining).toBeLessThanOrEqual(q.funnel[i - 1].remaining);
+    expect(q.qualified).toBe(e.filter((x) => x.gate.passed).length);
     // Minggu yang sedang berjalan (belum lengkap) tidak ikut dinilai.
     expect(run.report.policy.weeks.every((w) => w.weekStart < weekStart(END))).toBe(true);
   });
@@ -147,5 +177,62 @@ describe('turnamen mingguan', () => {
     expect(bold.picks.length).toBe(1);
     expect(calm.picks.length).toBeGreaterThanOrEqual(1);
     expect(Math.max(...bold.picks.map((p) => p.weight))).toBeGreaterThanOrEqual(Math.max(...calm.picks.map((p) => p.weight)));
+  });
+});
+
+describe('statistik', () => {
+  it('distribusi normal', () => {
+    expect(normCdf(0)).toBeCloseTo(0.5, 6);
+    expect(normCdf(1.959964)).toBeCloseTo(0.975, 4);
+    expect(normInv(0.975)).toBeCloseTo(1.959964, 5);
+    expect(normInv(0.01)).toBeCloseTo(-2.326348, 5);
+  });
+
+  it('PSR/DSR: edge nyata lolos, noise tidak, DSR lebih ketat dari PSR', () => {
+    const z = gaussian(mulberry32(42));
+    const edge = Array.from({ length: 90 }, () => 0.006 + 0.01 * z());
+    const noise = Array.from({ length: 90 }, () => 0.02 * z());
+    expect(psr(edge)).toBeGreaterThan(0.99);
+    expect(psr(noise)).toBeLessThan(0.95);
+    expect(dsr(edge, 200, 0.01)).toBeLessThanOrEqual(psr(edge));
+    expect(expectedMaxSharpe(1000, 0.01)).toBeGreaterThan(expectedMaxSharpe(10, 0.01));
+  });
+});
+
+describe('saringan kualifikasi', () => {
+  const opts = { profile: RISK_PROFILES.bold, lookbackWeeks: 12, walkForwardWeeks: 4, benchmark: 'BTC', cost: { feeRate: 0.0005, slippage: 0.0003 } };
+  const rule = RULES.find((r) => r.id === 'L12-H4')!;
+  const fake = (id: string, mu: number, sd: number, seed: number): Candidate => {
+    const z = gaussian(mulberry32(seed));
+    const daily = Array.from({ length: 16 }, () => Array.from({ length: 7 }, () => mu + sd * z()));
+    return {
+      id,
+      strategy: ALL[0],
+      params: {},
+      universe: [id],
+      label: id,
+      diversityKey: id,
+      familyKey: id,
+      daily,
+      weekly: daily.map((w) => w.reduce((a, r) => a * (1 + r), 1) - 1),
+      weeklyEntries: daily.map(() => 2),
+      weeklyTurnover: daily.map(() => 1),
+      exposure: 1,
+    };
+  };
+
+  it('kandidat dengan edge nyata lolos saringan Ketat di antara 80 kandidat noise', () => {
+    const cands = [...Array.from({ length: 80 }, (_, i) => fake(`noise${i}`, 0, 0.02, i + 1)), fake('edge', 0.006, 0.01, 999)];
+    const sel = selectPicks(cands, 16, rule, opts);
+    expect(sel.level).toBe(0);
+    expect(sel.picks[0].candidate.id).toBe('edge');
+  });
+
+  it('tanpa edge, saringan dilonggarkan bertahap dan tetap menemukan juara', () => {
+    const cands = Array.from({ length: 80 }, (_, i) => fake(`noise${i}`, 0, 0.02, i + 1));
+    const sel = selectPicks(cands, 16, rule, opts);
+    expect(sel.level).toBeGreaterThan(0);
+    expect(sel.picks.length).toBeGreaterThan(0);
+    expect(GATES[sel.level].label).not.toBe('Ketat');
   });
 });

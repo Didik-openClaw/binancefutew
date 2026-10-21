@@ -50,7 +50,10 @@ export function Overview({ snap, go }: { snap: DashboardSnapshot; go: (v: string
           </div>
           {pb && (
             <div className="holding">
-              <span className="label">Dipegang minggu {isoWeek(pb.weekStart)}</span>
+              <span className="label">
+                Dipegang minggu {isoWeek(pb.weekStart)}
+                {snap.tournament ? ` · bukti ${snap.tournament.qualification.levelLabel.toLowerCase()}` : ''}
+              </span>
               <ul>
                 {pb.strategies.map((s) => (
                   <li key={s.id}>

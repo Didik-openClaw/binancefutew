@@ -11,6 +11,7 @@ export interface CostModel {
 export interface BacktestResult {
   equity: Float64Array; // ekuitas relatif, mulai 1
   entries: Uint8Array; // 1 jika bar ini membuka/membalik posisi
+  traded: Float64Array; // perubahan leverage (turnover) per bar
   exposure: number; // rata-rata gross leverage
   turnover: number; // total perubahan leverage
   liquidated: boolean;
@@ -22,6 +23,7 @@ export function backtest(d: Dataset, positions: Record<string, Float64Array>, co
   const coins = Object.keys(positions);
   const equity = new Float64Array(n);
   const entries = new Uint8Array(n);
+  const tradedBars = new Float64Array(n);
   const perSide = cost.feeRate + cost.slippage;
   let eq = 1;
   let gross = 0;
@@ -56,13 +58,14 @@ export function backtest(d: Dataset, positions: Record<string, Float64Array>, co
     }
     eq -= eq * traded * perSide;
     turnover += traded;
+    tradedBars[i] = traded;
     if (eq <= 0) {
       eq = 0;
       liquidated = true;
     }
     equity[i] = eq;
   }
-  return { equity, entries, exposure: gross / Math.max(1, n - 1), turnover, liquidated };
+  return { equity, entries, traded: tradedBars, exposure: gross / Math.max(1, n - 1), turnover, liquidated };
 }
 
 export interface WeekSlice {
@@ -92,10 +95,29 @@ export function weeklyReturns(equity: Float64Array, weeks: WeekSlice[]): number[
   });
 }
 
-export function weeklyEntries(entries: Uint8Array, weeks: WeekSlice[]): number[] {
+export function weeklySum(xs: ArrayLike<number>, weeks: WeekSlice[]): number[] {
   return weeks.map((w) => {
     let n = 0;
-    for (let i = w.first; i <= w.last; i++) n += entries[i];
+    for (let i = w.first; i <= w.last; i++) n += xs[i];
     return n;
+  });
+}
+
+export const weeklyEntries = (entries: Uint8Array, weeks: WeekSlice[]) => weeklySum(entries, weeks);
+
+// Return harian (hari UTC) per minggu: daily[k] = return tiap hari dalam minggu k.
+export function dailyByWeek(equity: Float64Array, t: number[], weeks: WeekSlice[]): number[][] {
+  const DAY = 86_400_000;
+  return weeks.map((w, k) => {
+    const out: number[] = [];
+    let base = k === 0 ? equity[w.first] : equity[weeks[k - 1].last];
+    for (let i = w.first; i <= w.last; i++) {
+      const lastOfDay = i === w.last || Math.floor(t[i + 1] / DAY) !== Math.floor(t[i] / DAY);
+      if (lastOfDay) {
+        out.push(base > 0 ? equity[i] / base - 1 : 0);
+        base = equity[i];
+      }
+    }
+    return out;
   });
 }

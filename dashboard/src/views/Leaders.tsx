@@ -7,6 +7,7 @@ export function Leaders({ snap }: { snap: DashboardSnapshot }) {
   const copying = ls.filter((l) => l.status === 'copying');
   const rejected = ls.filter((l) => l.status === 'rejected');
   const copyAlloc = snap.playbook?.allocation.copy ?? 0;
+  const sc = snap.scout;
   return (
     <>
       <div className="page-head">
@@ -15,8 +16,8 @@ export function Leaders({ snap }: { snap: DashboardSnapshot }) {
             Trader <em>Hyperliquid</em>
           </h1>
           <p>
-            Semua posisi wallet Hyperliquid bersifat publik, jadi engine bisa menyalinnya tanpa izin siapa pun. Tiap Senin, leaderboard disaring lalu kandidat terbaik dianalisis: riwayat fill 7 hari, drawdown 30 hari, dan
-            frekuensi trading. Yang lolos dibobot menurut skor; profil Berani menumpuk bobot ke peringkat teratas.
+            Semua posisi wallet Hyperliquid bersifat publik, jadi engine bisa menyalinnya tanpa izin siapa pun. Tiap Senin, leaderboard disaring lalu kandidat dianalisis mendalam per 20 trader (riwayat fill 7 hari, lama pegang
+            posisi, drawdown & hari profit 30 hari) sampai yang lolos cukup untuk diadu. Yang terbaik dibobot menurut skor; profil Berani menumpuk bobot ke peringkat teratas.
           </p>
         </div>
       </div>
@@ -25,7 +26,10 @@ export function Leaders({ snap }: { snap: DashboardSnapshot }) {
         <div className="figures" style={{ marginTop: 0, borderTop: 0 }}>
           <div>
             <span className="label">Dianalisis</span>
-            <b>{ls.length}</b>
+            <b>
+              {sc ? sc.analyzed : ls.length}
+              {sc && <span className="flat" style={{ fontSize: 'var(--t-small)', fontWeight: 400 }}> dari {sc.leaderboardSize}</span>}
+            </b>
           </div>
           <div>
             <span className="label">Disalin</span>
@@ -41,6 +45,14 @@ export function Leaders({ snap }: { snap: DashboardSnapshot }) {
           </div>
         </div>
       </section>
+
+      {sc && (
+        <p className="note" style={{ maxWidth: 'none' }}>
+          Pencarian berhenti setelah {sc.rounds} putaran: {sc.qualified} trader lolos semua uji pada saringan awal {sc.levelLabel}
+          {sc.level > 0 ? ' (saringan awal dilonggarkan karena saringan Ketat tidak menghasilkan cukup trader)' : ''}.
+          {snap.synthetic ? ' Di dunia demo, beberapa trader sintetis sengaja diberi keunggulan buatan untuk menguji apakah scout bisa menemukannya, jadi hasil copy di demo lebih bagus dari yang wajar.' : ''}
+        </p>
+      )}
 
       <section className="panel" style={{ marginTop: 'var(--gap)' }}>
         <div className="panel-head">
@@ -59,6 +71,8 @@ export function Leaders({ snap }: { snap: DashboardSnapshot }) {
                   <th className="r">ROI 30h</th>
                   <th className="r">Win rate</th>
                   <th className="r">DD 30h</th>
+                  <th className="r">Hari profit</th>
+                  <th className="r">Pegang</th>
                   <th className="r">Fill/hari</th>
                   <th className="r">Skor</th>
                   <th>Bobot</th>
@@ -91,6 +105,8 @@ export function Leaders({ snap }: { snap: DashboardSnapshot }) {
                     <td className={`r ${tone(l.monthRoi)}`}>{pct(l.monthRoi)}</td>
                     <td className="r">{l.winRate === null ? '—' : `${Math.round(l.winRate * 100)}%`}</td>
                     <td className="r">{l.maxDrawdown === null ? '—' : pct(-l.maxDrawdown, 0)}</td>
+                    <td className="r">{l.positiveDays == null ? '—' : `${Math.round(l.positiveDays * 100)}%`}</td>
+                    <td className="r">{l.holdHours == null ? '—' : l.holdHours >= 24 ? `${(l.holdHours / 24).toFixed(1)} hari` : `${l.holdHours.toFixed(1)} jam`}</td>
                     <td className="r">{l.fillsPerDay === null ? '—' : num(l.fillsPerDay, 0)}</td>
                     <td className="r">{l.status === 'rejected' ? '—' : l.score.toFixed(2)}</td>
                     <td>
@@ -121,13 +137,19 @@ export function Leaders({ snap }: { snap: DashboardSnapshot }) {
             <li>
               <span className="what">
                 Akun minimal & ROI positif
-                <small>Nilai akun ≥ $25k, ROI 7 hari ≥ 3%, ROI 30 hari dan PnL all-time positif.</small>
+                <small>Nilai akun ≥ $25k, ROI 7 hari ≥ 3%, ROI 30 hari dan PnL all-time positif. Bila trader yang lolos kurang, saringan ini dilonggarkan bertahap; uji di bawahnya tidak pernah dilonggarkan.</small>
               </span>
             </li>
             <li>
               <span className="what">
                 Bukan bot / market maker
                 <small>Volume mingguan ≤ 200× akun dan ≤ 150 fill per hari. Gaya HFT tidak bisa disalin tepat waktu.</small>
+              </span>
+            </li>
+            <li>
+              <span className="what">
+                Bukan scalper
+                <small>Maksimal 50% PnL dari posisi yang dipegang &lt; 10 menit. Gerakan secepat itu sudah lewat sebelum sempat disalin.</small>
               </span>
             </li>
             <li>
@@ -151,7 +173,7 @@ export function Leaders({ snap }: { snap: DashboardSnapshot }) {
           <ul className="pick-list" style={{ marginTop: 0 }}>
             <li>
               <span className="what">ROI 7 hari</span>
-              <span className="num">40%</span>
+              <span className="num">35%</span>
             </li>
             <li>
               <span className="what">ROI 30 hari</span>
@@ -163,7 +185,11 @@ export function Leaders({ snap }: { snap: DashboardSnapshot }) {
             </li>
             <li>
               <span className="what">Profit factor</span>
-              <span className="num">15%</span>
+              <span className="num">10%</span>
+            </li>
+            <li>
+              <span className="what">Hari profit 30 hari</span>
+              <span className="num">10%</span>
             </li>
             <li>
               <span className="what">Drawdown 30 hari (makin kecil makin baik)</span>

@@ -9,7 +9,7 @@ import type { PriceFeed } from '../src/exchanges/types';
 import { HOUR, WEEK, weekStart } from '../src/lib/time';
 import { RISK_PROFILES } from '../src/risk/profiles';
 import { RiskManager } from '../src/risk/riskManager';
-import { fillMetrics, parseLeaderboard, portfolioDrawdown, prefilter, rankLeaders } from '../src/scout/hyperliquidScout';
+import { type DeepMetrics, fillMetrics, holdingProfile, parseLeaderboard, portfolioDrawdown, prefilter, rankLeaders, runScout, type ParsedRow } from '../src/scout/hyperliquidScout';
 import { Store } from '../src/store';
 
 const plan = { minOrderUsd: 10, band: 0.1, roundQty: (_: string, q: number) => Math.round(q * 1e6) / 1e6, minNotional: () => 10 };
@@ -147,7 +147,7 @@ describe('scout Hyperliquid', () => {
 
   it('bobot leader terpilih berjumlah 1, yang ditolak berbobot 0', () => {
     const parsed = parseLeaderboard([row('0x1', 1e5, 0.3, 0.6, 1e6), row('0x2', 1e5, 0.2, 0.3, 1e6), row('0x3', 1e5, 0.1, 0.1, 1e6)]);
-    const m = { winRate: 0.6, profitFactor: 2, fillsPerDay: 5, closingTrades: 10, topTradeShare: 0.3, maxDrawdown: 0.1, openPositions: 2, coins: ['BTC'] };
+    const m = { winRate: 0.6, profitFactor: 2, fillsPerDay: 5, closingTrades: 10, topTradeShare: 0.3, maxDrawdown: 0.1, openPositions: 2, coins: ['BTC'], holdHours: 20, scalpShare: 0.02, positiveDays: 0.6 };
     const v = rankLeaders(
       [
         { row: parsed[0], m },
@@ -212,7 +212,10 @@ describe('leader bermasalah', () => {
         return { ...src, fetch: () => (failing ? Promise.reject(new Error('timeout')) : src.fetch()) };
       },
       // Paksa satu leader disalin supaya jalur copy teruji.
-      scout: async (o) => (await world.scout(o)).map((l, i) => (i === 0 ? { ...l, status: 'copying' as const, weight: 1, reason: undefined } : { ...l, status: 'rejected' as const, weight: 0 })),
+      scout: async (o) => {
+        const r = await world.scout(o);
+        return { ...r, leaders: r.leaders.map((l, i) => (i === 0 ? { ...l, status: 'copying' as const, weight: 1, reason: undefined } : { ...l, status: 'rejected' as const, weight: 0 })) };
+      },
       synthetic: true,
     });
     await engine.start();
@@ -241,4 +244,51 @@ describe('leader bermasalah', () => {
     }
     expect(engine.snapshot().alerts.some((a) => a.message.includes('tidak lagi disalin'))).toBe(true);
   }, 60_000);
+});
+
+describe('scout: cari sampai dapat', () => {
+  const opts = { minAccountValue: 25_000, maxWeeklyTurnover: 200, maxFillsPerDay: 150, maxDrawdown: 0.45, deepDive: 100, slots: 2, concentration: 0.5 };
+  const good: DeepMetrics = { winRate: 0.6, profitFactor: 2, fillsPerDay: 6, closingTrades: 12, topTradeShare: 0.3, maxDrawdown: 0.15, openPositions: 2, coins: ['BTC'], holdHours: 20, scalpShare: 0.05, positiveDays: 0.6 };
+  const row = (i: number, weekRoi: number): ParsedRow => ({
+    address: `0x${i.toString(16).padStart(40, '0')}`,
+    label: `t${i}`,
+    accountValue: 100_000,
+    week: { pnl: weekRoi * 100_000, roi: weekRoi, vlm: 1e6 },
+    month: { pnl: 20_000, roi: 0.2, vlm: 4e6 },
+    allTime: { pnl: 50_000, roi: 0.5, vlm: 1e7 },
+  });
+
+  it('lama pegang posisi & porsi scalping direkonstruksi dari fill', () => {
+    const f = (time: number, side: 'A' | 'B', start: number, pnl: number) => ({ coin: 'BTC', px: '1', sz: '1', side, time, dir: '', startPosition: String(start), closedPnl: String(pnl), fee: '0', oid: 1, hash: '' });
+    const H = 3_600_000;
+    const p = holdingProfile([f(0, 'B', 0, 0), f(5 * 60_000, 'A', 1, 10), f(10 * H, 'A', 0, 0), f(13 * H, 'B', -1, 30)]);
+    expect(p.scalpShare).toBeCloseTo(10 / 40);
+    expect(p.holdHours).toBeCloseTo(3);
+  });
+
+  it('10 kandidat teratas ditolak (scalper) -> lanjut menggali sampai slot terisi', async () => {
+    const rows = [...Array.from({ length: 10 }, (_, i) => row(i, 0.5 - i * 0.01)), ...Array.from({ length: 30 }, (_, i) => row(100 + i, 0.2 - i * 0.001))];
+    const scalper = { ...good, scalpShare: 0.9 };
+    const r = await runScout(opts, { leaderboard: async () => rows, deepDive: async (a) => (parseInt(a, 16) < 100 ? scalper : good) }, () => {}, 0);
+    expect(r.summary.analyzed).toBe(20);
+    expect(r.summary.rounds).toBe(1);
+    expect(r.leaders.filter((l) => l.status === 'copying').length).toBe(2);
+    expect(r.leaders.filter((l) => l.status === 'rejected').every((l) => l.reason?.includes('scalping'))).toBe(true);
+  });
+
+  it('tidak ada yang lolos saringan ketat -> saringan awal dilonggarkan', async () => {
+    // Semua ROI 7 hari hanya 1% (< 3%): baru masuk di saringan Standar.
+    const rows = Array.from({ length: 5 }, (_, i) => row(i, 0.01));
+    const r = await runScout(opts, { leaderboard: async () => rows, deepDive: async () => good }, () => {}, 0);
+    expect(r.summary.level).toBe(1);
+    expect(r.summary.qualified).toBe(5);
+    expect(r.leaders.filter((l) => l.status === 'copying').length).toBe(2);
+  });
+
+  it('batas deepDive dihormati', async () => {
+    const rows = Array.from({ length: 50 }, (_, i) => row(i, 0.3));
+    const r = await runScout({ ...opts, deepDive: 7 }, { leaderboard: async () => rows, deepDive: async () => ({ ...good, closingTrades: 0 }) }, () => {}, 0);
+    expect(r.summary.analyzed).toBe(7);
+    expect(r.summary.qualified).toBe(0);
+  });
 });
